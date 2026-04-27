@@ -3,20 +3,21 @@
 // license that can be found in the LICENSE file.
 
 /**
- * JSON-RPC method names defined by the MCP interceptors extension (SEP-1763).
+ * JSON-RPC method names defined by SEP-2624. Only two methods cross the wire;
+ * chain execution is an SDK-side convenience that loops over `interceptor/invoke`.
  */
 export const InterceptorRequestMethods = {
   InterceptorsList: 'interceptors/list',
   InterceptorInvoke: 'interceptor/invoke',
-  InterceptorExecuteChain: 'interceptor/executeChain',
 } as const;
 
 export type InterceptorRequestMethod =
   (typeof InterceptorRequestMethods)[keyof typeof InterceptorRequestMethods];
 
 /**
- * The capability key under which the interceptors capability is advertised
- * in `ServerCapabilities` (typically nested under `experimental` in the TS SDK,
- * which mirrors the C# SDK's `ServerCapabilities.Extensions["interceptors"]`).
+ * Capability key under which the interceptor extension is advertised. SEP-2624
+ * places it at top-level (`capabilities.interceptor`, singular). The TS MCP
+ * SDK's `ServerCapabilities` schema strips unknown top-level fields, so we
+ * nest under `experimental` while preserving the singular SEP key.
  */
-export const INTERCEPTOR_CAPABILITY_KEY = 'interceptors';
+export const INTERCEPTOR_CAPABILITY_KEY = 'interceptor';

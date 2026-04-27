@@ -14,11 +14,11 @@ import {
 } from './validation.js';
 
 /**
- * Result of an `interceptor/executeChain` request.
- *
- * Mirrors C# `InterceptorChainResult`.
+ * Result of an SDK-side chain execution. SEP-2624 defines this shape as
+ * `ChainExecutionResult` for the convenience utility — chain execution is
+ * local, so this never crosses the wire.
  */
-export const InterceptorChainResultSchema = z.object({
+export const ChainExecutionResultSchema = z.object({
   status: InterceptorChainStatusSchema,
   event: z.string().optional(),
   phase: InterceptorPhaseSchema,
@@ -28,4 +28,4 @@ export const InterceptorChainResultSchema = z.object({
   totalDurationMs: z.number().int().nonnegative(),
   abortedAt: ChainAbortInfoSchema.optional(),
 });
-export type InterceptorChainResult = z.infer<typeof InterceptorChainResultSchema>;
+export type ChainExecutionResult = z.infer<typeof ChainExecutionResultSchema>;

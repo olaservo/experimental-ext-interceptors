@@ -5,28 +5,34 @@
 import * as z from 'zod/v4';
 
 /**
- * Interceptor type. Determines result shape and chain execution semantics.
+ * Interceptor type per SEP-2624 — only two types exist on the wire.
  *
- * - `validation`: pass/fail with severity, executes in parallel, error severity aborts the chain.
+ * - `validation`: pass/fail with severity, executes in parallel, error severity aborts the chain
+ *   unless the interceptor is in audit mode.
  * - `mutation`: transforms payloads, executes sequentially ordered by `priorityHint`.
- * - `observability`: fire-and-forget, parallel, failures swallowed.
+ *
+ * Pure observers (logging/metrics) are expressed as audit-mode validators
+ * (`type: 'validation'`, `mode: 'audit'`, `failOpen: true`).
  */
-export const InterceptorTypeSchema = z.enum([
-  'validation',
-  'mutation',
-  'observability',
-]);
+export const InterceptorTypeSchema = z.enum(['validation', 'mutation']);
 export type InterceptorType = z.infer<typeof InterceptorTypeSchema>;
 
 /**
- * Phase in which an interceptor executes relative to the request/response lifecycle.
- *
- * - `request`: before the operation is forwarded to the backend.
- * - `response`: after the backend has produced a result.
- * - `both`: applies to both directions.
+ * Execution phase per SEP-2624. There is no `'both'` value — interceptors that
+ * fire on both phases declare two `hooks[]` entries.
  */
-export const InterceptorPhaseSchema = z.enum(['request', 'response', 'both']);
+export const InterceptorPhaseSchema = z.enum(['request', 'response']);
 export type InterceptorPhase = z.infer<typeof InterceptorPhaseSchema>;
+
+/**
+ * Execution mode per SEP-2624.
+ *
+ * - `active` (default): normal blocking / transforming behavior
+ * - `audit`: non-blocking. Validators log violations without blocking; mutations
+ *   compute their transformations but do not apply them (shadow mutations).
+ */
+export const InterceptorModeSchema = z.enum(['active', 'audit']);
+export type InterceptorMode = z.infer<typeof InterceptorModeSchema>;
 
 /**
  * Severity of a validation message.

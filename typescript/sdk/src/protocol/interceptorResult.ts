@@ -3,7 +3,11 @@
 // license that can be found in the LICENSE file.
 
 import * as z from 'zod/v4';
-import { InterceptorPhaseSchema, ValidationSeveritySchema } from './enums.js';
+import {
+  InterceptorModeSchema,
+  InterceptorPhaseSchema,
+  ValidationSeveritySchema,
+} from './enums.js';
 import {
   ValidationMessageSchema,
   ValidationSuggestionSchema,
@@ -14,6 +18,12 @@ const baseFields = {
   /** Name of the interceptor that produced this result. */
   interceptor: z.string().optional(),
   phase: InterceptorPhaseSchema.optional(),
+  /**
+   * Echoes the originating interceptor's mode. Hosts use this to recognise
+   * audit-mode results (which never block) without having to look up the
+   * interceptor metadata again.
+   */
+  mode: InterceptorModeSchema.optional(),
   durationMs: z.number().int().optional(),
   info: z.record(z.string(), z.unknown()).optional(),
 };
@@ -40,29 +50,18 @@ export type MutationInterceptorResult = z.infer<
   typeof MutationInterceptorResultSchema
 >;
 
-export const ObservabilityInterceptorResultSchema = z.object({
-  type: z.literal('observability'),
-  ...baseFields,
-  observed: z.boolean(),
-  metrics: z.record(z.string(), z.number()).optional(),
-});
-export type ObservabilityInterceptorResult = z.infer<
-  typeof ObservabilityInterceptorResultSchema
->;
-
 /**
  * Polymorphic union over interceptor result types, discriminated by `type`.
- * Mirrors C# `InterceptorResult` with `[JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]`.
+ * Per SEP-2624 only validation and mutation results exist on the wire.
  */
 export const InterceptorResultSchema = z.discriminatedUnion('type', [
   ValidationInterceptorResultSchema,
   MutationInterceptorResultSchema,
-  ObservabilityInterceptorResultSchema,
 ]);
 export type InterceptorResult = z.infer<typeof InterceptorResultSchema>;
 
 // ---------------------------------------------------------------------------
-// Convenience constructors. These mirror the C# static factory helpers.
+// Convenience constructors.
 // ---------------------------------------------------------------------------
 
 export const ValidationResult = {
@@ -106,13 +105,3 @@ export const MutationResult = {
     return { type: 'mutation', modified: true, payload };
   },
 };
-
-export const ObservabilityResult = {
-  success(metrics?: Record<string, number>): ObservabilityInterceptorResult {
-    return { type: 'observability', observed: true, metrics };
-  },
-  noop(): ObservabilityInterceptorResult {
-    return { type: 'observability', observed: false };
-  },
-};
-

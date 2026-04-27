@@ -69,9 +69,12 @@ export type InvokeInterceptorRequestParams = z.infer<
 >;
 
 /**
- * Parameters for the `interceptor/executeChain` request.
+ * Parameters to the SDK-side chain execution helper. SEP-2624 defines this as
+ * `ChainExecutionParams` for the convenience utility — it is **not** a wire
+ * method (chain execution is local; remote interceptors are reached via
+ * repeated `interceptor/invoke` calls).
  */
-export const ExecuteChainRequestParamsSchema = z.object({
+export const ChainExecutionParamsSchema = z.object({
   event: z.string(),
   phase: InterceptorPhaseSchema,
   payload: z.unknown(),
@@ -80,8 +83,5 @@ export const ExecuteChainRequestParamsSchema = z.object({
   config: z.unknown().optional(),
   timeoutMs: z.number().int().positive().optional(),
   context: InvokeInterceptorContextSchema.optional(),
-  _meta: z.record(z.string(), z.unknown()).optional(),
 });
-export type ExecuteChainRequestParams = z.infer<
-  typeof ExecuteChainRequestParamsSchema
->;
+export type ChainExecutionParams = z.infer<typeof ChainExecutionParamsSchema>;

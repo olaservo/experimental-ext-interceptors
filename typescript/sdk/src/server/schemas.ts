@@ -4,7 +4,6 @@
 
 import * as z from 'zod/v4';
 import {
-  ExecuteChainRequestParamsSchema,
   InterceptorRequestMethods,
   InvokeInterceptorRequestParamsSchema,
   ListInterceptorsRequestParamsSchema,
@@ -12,6 +11,10 @@ import {
 
 /**
  * Zod request schemas in the shape `setRequestHandler` expects: `{ method, params }`.
+ *
+ * SEP-2624 defines exactly two wire methods: `interceptors/list` and
+ * `interceptor/invoke`. Chain execution is an SDK-side helper that loops over
+ * `interceptor/invoke` — there is no `interceptor/executeChain` wire method.
  */
 export const ListInterceptorsRequestSchema = z.object({
   method: z.literal(InterceptorRequestMethods.InterceptorsList),
@@ -21,9 +24,4 @@ export const ListInterceptorsRequestSchema = z.object({
 export const InvokeInterceptorRequestSchema = z.object({
   method: z.literal(InterceptorRequestMethods.InterceptorInvoke),
   params: InvokeInterceptorRequestParamsSchema,
-});
-
-export const ExecuteChainRequestSchema = z.object({
-  method: z.literal(InterceptorRequestMethods.InterceptorExecuteChain),
-  params: ExecuteChainRequestParamsSchema,
 });

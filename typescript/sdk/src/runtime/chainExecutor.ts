@@ -4,32 +4,40 @@
 
 import {
   type ChainAbortInfo,
+  type ChainExecutionParams,
+  type ChainExecutionResult,
   type ChainValidationSummary,
-  type ExecuteChainRequestParams,
-  type InterceptorChainResult,
+  type Interceptor,
   type InterceptorChainStatus,
+  type InterceptorMode,
   type InterceptorPhase,
   type InterceptorResult,
-  ObservabilityResult,
+  resolvePriority,
 } from '../protocol/index.js';
 import { matchesEvent } from './eventMatching.js';
 import type { McpInterceptor } from './interceptor.js';
 
 /**
- * Executes a list of locally-defined interceptors according to SEP-1763.
+ * Executes a list of locally-defined interceptors per SEP-2624.
  *
  * Sending (request phase): mutations (sequential, ascending priority) →
- *   validations (parallel) → observability (parallel, fire-and-forget).
- * Receiving (response phase): validations (parallel) →
- *   observability (parallel, fire-and-forget) → mutations (sequential).
+ *   validations (parallel) → forward.
+ * Receiving (response phase): receive → validations (parallel) → mutations
+ *   (sequential).
  *
- * Mirrors C# `Server/InterceptorChainExecutor.cs`.
+ * Audit-mode interceptors (`mode: 'audit'`) never block — their results are
+ * recorded but they cannot abort the chain. Fail-open interceptors
+ * (`failOpen: true`) survive throws and timeouts without aborting.
+ *
+ * Pure observers are expressed as audit-mode validators (`mode: 'audit'`,
+ * `failOpen: true`) — they run in parallel like other validators but cannot
+ * block and tolerate crashes.
  */
 export async function executeChain(
   interceptors: readonly McpInterceptor[],
-  params: ExecuteChainRequestParams,
+  params: ChainExecutionParams,
   signal?: AbortSignal,
-): Promise<InterceptorChainResult> {
+): Promise<ChainExecutionResult> {
   const start = Date.now();
   const results: InterceptorResult[] = [];
   const summary: ChainValidationSummary = { errors: 0, warnings: 0, infos: 0 };
@@ -41,15 +49,12 @@ export async function executeChain(
   const mutations = applicable
     .filter((i) => i.metadata.type === 'mutation')
     .sort((a, b) => {
-      const pa = a.metadata.priorityHint ?? 0;
-      const pb = b.metadata.priorityHint ?? 0;
+      const pa = resolvePriority(a.metadata.priorityHint, params.phase);
+      const pb = resolvePriority(b.metadata.priorityHint, params.phase);
       if (pa !== pb) return pa - pb;
       return a.metadata.name < b.metadata.name ? -1 : 1;
     });
   const validations = applicable.filter((i) => i.metadata.type === 'validation');
-  const observability = applicable.filter(
-    (i) => i.metadata.type === 'observability',
-  );
 
   const timeoutController = params.timeoutMs
     ? new AbortController()
@@ -94,18 +99,10 @@ export async function executeChain(
         if (valResult.status !== 'success') {
           status = valResult.status;
           abortInfo = valResult.abort;
-        } else {
-          await runObservability(
-            observability,
-            params,
-            currentPayload,
-            results,
-            effectiveSignal,
-          );
         }
       }
     } else {
-      // 'response' or 'both' (chain executes per-phase, so 'both' is unusual here)
+      // response phase
       const valResult = await runValidations(
         validations,
         params,
@@ -118,13 +115,6 @@ export async function executeChain(
         status = valResult.status;
         abortInfo = valResult.abort;
       } else {
-        await runObservability(
-          observability,
-          params,
-          currentPayload,
-          results,
-          effectiveSignal,
-        );
         const mutResult = await runMutations(
           mutations,
           params,
@@ -172,13 +162,14 @@ interface MutationsOutcome extends PhaseOutcome {
 
 async function runMutations(
   mutations: McpInterceptor[],
-  params: ExecuteChainRequestParams,
+  params: ChainExecutionParams,
   initialPayload: unknown,
   results: InterceptorResult[],
   signal: AbortSignal | undefined,
 ): Promise<MutationsOutcome> {
   let payload = initialPayload;
   for (const interceptor of mutations) {
+    const mode = effectiveMode(interceptor.metadata.mode);
     try {
       const t0 = Date.now();
       const result = await interceptor.invoke({
@@ -189,15 +180,29 @@ async function runMutations(
         context: params.context,
         signal,
       });
-      const stamped = stamp(result, interceptor.metadata.name, params.phase, t0);
+      const stamped = stamp(result, interceptor.metadata, params.phase, t0);
       results.push(stamped);
-      if (stamped.type === 'mutation') {
+      // Audit-mode mutations are SHADOW: result is recorded but the
+      // transformation is not applied to the live payload.
+      if (mode === 'active' && stamped.type === 'mutation') {
         const m = stamped;
         if (m.modified && m.payload !== undefined) {
           payload = m.payload;
         }
       }
     } catch (err) {
+      // Audit-mode and fail-open mutations don't abort the chain.
+      if (mode === 'audit' || interceptor.metadata.failOpen) {
+        results.push({
+          type: 'mutation',
+          interceptor: interceptor.metadata.name,
+          phase: params.phase,
+          mode,
+          modified: false,
+          info: { error: err instanceof Error ? err.message : String(err) },
+        });
+        continue;
+      }
       return {
         payload,
         status: 'mutation_failed',
@@ -214,7 +219,7 @@ async function runMutations(
 
 async function runValidations(
   validations: McpInterceptor[],
-  params: ExecuteChainRequestParams,
+  params: ChainExecutionParams,
   payload: unknown,
   results: InterceptorResult[],
   summary: ChainValidationSummary,
@@ -222,19 +227,37 @@ async function runValidations(
 ): Promise<PhaseOutcome> {
   const settled = await Promise.all(
     validations.map(async (interceptor) => {
-      const t0 = Date.now();
-      const result = await interceptor.invoke({
-        payload,
-        config: extractConfig(params, interceptor.metadata.name),
-        event: params.event,
-        phase: params.phase,
-        context: params.context,
-        signal,
-      });
-      return {
-        interceptor,
-        result: stamp(result, interceptor.metadata.name, params.phase, t0),
-      };
+      const mode = effectiveMode(interceptor.metadata.mode);
+      try {
+        const t0 = Date.now();
+        const result = await interceptor.invoke({
+          payload,
+          config: extractConfig(params, interceptor.metadata.name),
+          event: params.event,
+          phase: params.phase,
+          context: params.context,
+          signal,
+        });
+        return {
+          interceptor,
+          result: stamp(result, interceptor.metadata, params.phase, t0),
+        };
+      } catch (err) {
+        // Audit-mode and fail-open validators record a synthetic result
+        // rather than aborting.
+        if (mode === 'audit' || interceptor.metadata.failOpen) {
+          const synthetic: InterceptorResult = {
+            type: 'validation',
+            interceptor: interceptor.metadata.name,
+            phase: params.phase,
+            mode,
+            valid: true,
+            info: { error: err instanceof Error ? err.message : String(err) },
+          };
+          return { interceptor, result: synthetic };
+        }
+        throw err;
+      }
     }),
   );
 
@@ -250,7 +273,14 @@ async function runValidations(
           else summary.infos++;
         }
       }
-      if (!v.valid && v.severity === 'error' && outcome.status === 'success') {
+      const mode = effectiveMode(interceptor.metadata.mode);
+      // Audit-mode results are recorded but cannot abort the chain.
+      if (
+        mode === 'active' &&
+        !v.valid &&
+        v.severity === 'error' &&
+        outcome.status === 'success'
+      ) {
         outcome = {
           status: 'validation_failed',
           abort: {
@@ -265,65 +295,41 @@ async function runValidations(
   return outcome;
 }
 
-async function runObservability(
-  observability: McpInterceptor[],
-  params: ExecuteChainRequestParams,
-  payload: unknown,
-  results: InterceptorResult[],
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  const settled = await Promise.all(
-    observability.map(async (interceptor) => {
-      try {
-        const t0 = Date.now();
-        const result = await interceptor.invoke({
-          payload,
-          config: extractConfig(params, interceptor.metadata.name),
-          event: params.event,
-          phase: params.phase,
-          context: params.context,
-          signal,
-        });
-        return stamp(result, interceptor.metadata.name, params.phase, t0);
-      } catch {
-        // Fire-and-forget: failures are swallowed and recorded as observed=false.
-        return {
-          ...ObservabilityResult.noop(),
-          interceptor: interceptor.metadata.name,
-          phase: params.phase,
-        } satisfies InterceptorResult;
-      }
-    }),
-  );
-  results.push(...settled);
-}
-
 function filterInterceptors(
   interceptors: readonly McpInterceptor[],
-  params: ExecuteChainRequestParams,
+  params: ChainExecutionParams,
 ): McpInterceptor[] {
   const nameFilter = params.interceptors;
   return interceptors.filter((i) => {
-    if (nameFilter && nameFilter.length > 0 && !nameFilter.includes(i.metadata.name)) {
+    if (
+      nameFilter &&
+      nameFilter.length > 0 &&
+      !nameFilter.includes(i.metadata.name)
+    ) {
       return false;
     }
-    if (!matchesEvent(i.metadata.events, params.event)) return false;
-    const phase = i.metadata.phase;
-    if (phase !== 'both' && phase !== params.phase) return false;
-    return true;
+    // Match if any hook entry covers this (event, phase) pair.
+    return i.metadata.hooks.some(
+      (h) => h.phase === params.phase && matchesEvent(h.events, params.event),
+    );
   });
+}
+
+function effectiveMode(mode: InterceptorMode | undefined): InterceptorMode {
+  return mode ?? 'active';
 }
 
 function stamp(
   result: InterceptorResult,
-  name: string,
+  meta: Interceptor,
   phase: InterceptorPhase,
   t0: number,
 ): InterceptorResult {
   return {
     ...result,
-    interceptor: name,
+    interceptor: meta.name,
     phase,
+    mode: effectiveMode(meta.mode),
     durationMs: Date.now() - t0,
   };
 }
@@ -332,10 +338,7 @@ function stamp(
  * Extract per-interceptor config from the chain `config` object, if present.
  * The chain `config` is treated as a map keyed by interceptor name.
  */
-function extractConfig(
-  params: ExecuteChainRequestParams,
-  name: string,
-): unknown {
+function extractConfig(params: ChainExecutionParams, name: string): unknown {
   const cfg = params.config;
   if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) {
     return (cfg as Record<string, unknown>)[name];

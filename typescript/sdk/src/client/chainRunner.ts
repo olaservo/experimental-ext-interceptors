@@ -4,20 +4,21 @@
 
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import {
+  type ChainExecutionResult,
   type InterceptorChainStatus,
   type InterceptorPhase,
   type InvokeInterceptorContext,
   McpInterceptorValidationError,
-  type InterceptorChainResult,
 } from '../protocol/index.js';
-import { executeInterceptorChain } from './interceptorClientHelpers.js';
+import { executeRemoteChain } from './interceptorClientHelpers.js';
 
 /**
- * Runs an interceptor chain phase across one or more interceptor server clients in order.
- * Each client's `interceptor/executeChain` receives the previous client's mutated payload.
+ * Runs an interceptor chain phase across one or more interceptor server
+ * clients. Discovery + ordering + invocation happen client-side per SEP-2624;
+ * each interceptor is reached via `interceptor/invoke` (there is no wire-level
+ * `executeChain`).
  *
- * Mirrors the C# `Gateway/InterceptorChainRunner.cs` semantics, but consumed by both
- * the {@link InterceptingClient} wrapper and the gateway transparent proxy.
+ * Used by both {@link InterceptingClient} and the gateway transparent proxy.
  */
 export class InterceptorChainRunner {
   constructor(
@@ -33,9 +34,8 @@ export class InterceptorChainRunner {
   }
 
   /**
-   * Runs the chain phase across all configured clients sequentially. Returns the
-   * payload after the last successful client and the resulting status. Stops on
-   * the first non-success status.
+   * Run a single chain phase across all configured interceptor clients. The
+   * SDK helper merges them into one chain ordered by SEP-2624 priority rules.
    */
   async runPhase(args: {
     event: string;
@@ -44,27 +44,20 @@ export class InterceptorChainRunner {
   }): Promise<{
     payload: unknown;
     status: InterceptorChainStatus;
-    chainResult?: InterceptorChainResult;
+    chainResult?: ChainExecutionResult;
   }> {
-    let current = args.payload;
-    let lastResult: InterceptorChainResult | undefined;
-
-    for (const client of this.clients) {
-      const result = await executeInterceptorChain(client, {
-        event: args.event,
-        phase: args.phase,
-        payload: current,
-        timeoutMs: this.timeoutMs,
-        context: this.defaultContext,
-      });
-      lastResult = result;
-      if (result.status !== 'success') {
-        return { payload: current, status: result.status, chainResult: result };
-      }
-      current = result.finalPayload ?? current;
-    }
-
-    return { payload: current, status: 'success', chainResult: lastResult };
+    const result = await executeRemoteChain(this.clients, {
+      event: args.event,
+      phase: args.phase,
+      payload: args.payload,
+      timeoutMs: this.timeoutMs,
+      context: this.defaultContext,
+    });
+    return {
+      payload: result.finalPayload ?? args.payload,
+      status: result.status,
+      chainResult: result,
+    };
   }
 }
 
@@ -78,7 +71,7 @@ export function throwChainFailure(args: {
   operation: string;
   phase: InterceptorPhase;
   status: InterceptorChainStatus;
-  chainResult?: InterceptorChainResult;
+  chainResult?: ChainExecutionResult;
 }): never {
   const phaseText = args.phase === 'request' ? 'Request' : 'Response';
   if (args.status === 'validation_failed') {

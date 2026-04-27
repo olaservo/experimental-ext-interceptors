@@ -3,13 +3,11 @@
 // license that can be found in the LICENSE file.
 
 /**
- * Interceptable event names from the MCP interceptors extension (SEP-1763).
- *
- * These mirror the C# `InterceptorEvents` constants from
- * `csharp/sdk/src/ModelContextProtocol.Interceptors/Protocol/InterceptorEvents.cs`.
+ * Interception event names per SEP-2624. Implementations MAY define additional
+ * events; SEP-2624 only requires that the wildcard `'*'` matches everything.
  */
 export const InterceptorEvents = {
-  // Server feature events
+  // MCP Server features
   ToolsList: 'tools/list',
   ToolsCall: 'tools/call',
   PromptsList: 'prompts/list',
@@ -18,7 +16,7 @@ export const InterceptorEvents = {
   ResourcesRead: 'resources/read',
   ResourcesSubscribe: 'resources/subscribe',
 
-  // Client feature events
+  // MCP Client features
   SamplingCreateMessage: 'sampling/createMessage',
   ElicitationCreate: 'elicitation/create',
   RootsList: 'roots/list',
@@ -26,9 +24,7 @@ export const InterceptorEvents = {
   // LLM interaction events
   LlmCompletion: 'llm/completion',
 
-  // Wildcard patterns
-  AllRequests: '*/request',
-  AllResponses: '*/response',
+  /** Wildcard: matches every event on the declaring hook entry's phase. */
   All: '*',
 } as const;
 

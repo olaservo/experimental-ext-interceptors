@@ -4,15 +4,15 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  InterceptorChainResultSchema,
+  ChainExecutionResultSchema,
   InterceptorResultSchema,
   ListInterceptorsResultSchema,
   MutationResult,
-  ObservabilityResult,
   ValidationResult,
+  resolvePriority,
 } from './index.js';
 
-describe('InterceptorResult discriminated union', () => {
+describe('InterceptorResult discriminated union (SEP-2624: 2 types)', () => {
   it('round-trips a validation result via JSON', () => {
     const r = ValidationResult.error('bad', '$.x');
     const wire = JSON.parse(JSON.stringify(r)) as unknown;
@@ -34,17 +34,10 @@ describe('InterceptorResult discriminated union', () => {
     expect(parsed.payload).toEqual({ hello: 'world' });
   });
 
-  it('round-trips an observability result via JSON', () => {
-    const r = ObservabilityResult.success({ bytes: 42 });
-    const wire = JSON.parse(JSON.stringify(r)) as unknown;
-    const parsed = InterceptorResultSchema.parse(wire);
-    expect(parsed.type).toBe('observability');
-    if (parsed.type !== 'observability') return;
-    expect(parsed.observed).toBe(true);
-    expect(parsed.metrics?.bytes).toBe(42);
-  });
-
-  it('rejects an unknown discriminator', () => {
+  it('rejects an unknown discriminator (no observability)', () => {
+    expect(() =>
+      InterceptorResultSchema.parse({ type: 'observability', observed: true }),
+    ).toThrow();
     expect(() =>
       InterceptorResultSchema.parse({ type: 'bogus', whatever: 1 }),
     ).toThrow();
@@ -52,8 +45,8 @@ describe('InterceptorResult discriminated union', () => {
 });
 
 describe('Chain result and list result schemas', () => {
-  it('parses a minimal InterceptorChainResult', () => {
-    const parsed = InterceptorChainResultSchema.parse({
+  it('parses a minimal ChainExecutionResult', () => {
+    const parsed = ChainExecutionResultSchema.parse({
       status: 'success',
       phase: 'request',
       results: [],
@@ -62,17 +55,70 @@ describe('Chain result and list result schemas', () => {
     expect(parsed.status).toBe('success');
   });
 
-  it('parses a ListInterceptorsResult shape', () => {
+  it('parses a ListInterceptorsResult with the SEP-2624 hooks shape', () => {
     const parsed = ListInterceptorsResultSchema.parse({
       interceptors: [
         {
           name: 'x',
-          events: ['tools/call'],
           type: 'validation',
-          phase: 'request',
+          hooks: [{ events: ['tools/call'], phase: 'request' }],
         },
       ],
     });
     expect(parsed.interceptors[0].name).toBe('x');
+    expect(parsed.interceptors[0].hooks[0].phase).toBe('request');
+  });
+
+  it('parses an interceptor with mode, failOpen, and per-phase priorityHint', () => {
+    const parsed = ListInterceptorsResultSchema.parse({
+      interceptors: [
+        {
+          name: 'audit-logger',
+          type: 'validation',
+          mode: 'audit',
+          failOpen: true,
+          hooks: [
+            { events: ['*'], phase: 'request' },
+            { events: ['*'], phase: 'response' },
+          ],
+        },
+        {
+          name: 'pii-redactor',
+          type: 'mutation',
+          hooks: [{ events: ['tools/call'], phase: 'request' }],
+          priorityHint: { request: -1000, response: 1000 },
+        },
+      ],
+    });
+    expect(parsed.interceptors[0].mode).toBe('audit');
+    expect(parsed.interceptors[0].failOpen).toBe(true);
+    expect(parsed.interceptors[1].priorityHint).toEqual({
+      request: -1000,
+      response: 1000,
+    });
+  });
+});
+
+describe('resolvePriority', () => {
+  it('returns 0 when undefined', () => {
+    expect(resolvePriority(undefined, 'request')).toBe(0);
+  });
+
+  it('returns the same number for both phases when given a number', () => {
+    expect(resolvePriority(-500, 'request')).toBe(-500);
+    expect(resolvePriority(-500, 'response')).toBe(-500);
+  });
+
+  it('returns the per-phase value when given an object', () => {
+    expect(resolvePriority({ request: -1000, response: 500 }, 'request')).toBe(
+      -1000,
+    );
+    expect(resolvePriority({ request: -1000, response: 500 }, 'response')).toBe(
+      500,
+    );
+  });
+
+  it('falls back to 0 when the per-phase entry is missing', () => {
+    expect(resolvePriority({ request: -1000 }, 'response')).toBe(0);
   });
 });

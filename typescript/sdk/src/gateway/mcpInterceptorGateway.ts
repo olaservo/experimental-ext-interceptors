@@ -34,12 +34,10 @@ import {
   throwChainFailure,
 } from '../client/chainRunner.js';
 import {
-  ExecuteChainRequestSchema,
   InvokeInterceptorRequestSchema,
   ListInterceptorsRequestSchema,
 } from '../server/schemas.js';
 import {
-  executeInterceptorChain,
   invokeInterceptor,
   listInterceptors,
 } from '../client/interceptorClientHelpers.js';
@@ -260,8 +258,8 @@ export class McpInterceptorGateway {
   }
 
   private wireInterceptorProtocolPassthrough(server: Server): void {
-    const [first] = this.options.interceptorClients;
-    if (!first) {
+    const clients = this.options.interceptorClients;
+    if (clients.length === 0) {
       throw new Error(
         'exposeInterceptorProtocol requires at least one interceptorClient',
       );
@@ -270,39 +268,26 @@ export class McpInterceptorGateway {
     // Aggregate `interceptors/list` across all configured interceptor clients.
     server.setRequestHandler(ListInterceptorsRequestSchema, async (req) => {
       const aggregated = await Promise.all(
-        this.options.interceptorClients.map((c) =>
-          listInterceptors(c, req.params),
-        ),
+        clients.map((c) => listInterceptors(c, req.params)),
       );
       return {
         interceptors: aggregated.flatMap((r) => r.interceptors),
       };
     });
 
-    // `interceptor/invoke` always targets a single interceptor by name; route to
-    // the first client that knows about it. For simplicity we just forward to the
-    // first client — the C# version does the same in single-client deployments.
-    server.setRequestHandler(InvokeInterceptorRequestSchema, async (req) =>
-      invokeInterceptor(first, req.params),
-    );
-
-    // `interceptor/executeChain` passes through the chain to all clients in order.
-    // Constructor guarantees `interceptorClients.length >= 1` when this branch runs,
-    // so we always seed `last` with the first client's result.
-    server.setRequestHandler(ExecuteChainRequestSchema, async (req) => {
-      const [head, ...rest] = this.options.interceptorClients;
-      let last = await executeInterceptorChain(head, req.params);
-      if (last.status !== 'success') return last;
-      let current = last.finalPayload ?? req.params.payload;
-      for (const client of rest) {
-        last = await executeInterceptorChain(client, {
-          ...req.params,
-          payload: current,
-        });
-        if (last.status !== 'success') return last;
-        current = last.finalPayload ?? current;
+    // `interceptor/invoke` targets a single named interceptor. We probe each
+    // upstream client's catalogue and route to the first one that hosts it.
+    // Per SEP-2624 there is no `interceptor/executeChain` wire method — chain
+    // execution is the SDK helper `executeRemoteChain`; we don't expose a
+    // gateway passthrough for it.
+    server.setRequestHandler(InvokeInterceptorRequestSchema, async (req) => {
+      for (const client of clients) {
+        const list = await listInterceptors(client);
+        if (list.interceptors.some((i) => i.name === req.params.name)) {
+          return invokeInterceptor(client, req.params);
+        }
       }
-      return last;
+      throw new Error(`Interceptor '${req.params.name}' not found on any upstream`);
     });
   }
 

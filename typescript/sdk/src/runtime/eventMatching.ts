@@ -5,29 +5,22 @@
 import { InterceptorEvents } from '../protocol/index.js';
 
 /**
- * Returns true when an interceptor declaring `interceptorEvents` matches the
- * incoming `requestEvent`.
+ * Returns true when an interceptor's hook events match the incoming event.
  *
- * Mirrors the C# `InterceptorChainExecutor.MatchesEvent` semantics:
- * - `*` matches any event
- * - exact match by event name
- * - `*\/request` and `*\/response` match events that look "phase-tagged"
- *   (the C# port uses a heuristic against the `/` separator; we replicate that
- *   to stay wire-compatible until the SEP nails wildcards down)
+ * SEP-2624 only requires that the literal `'*'` matches every event.
+ * Implementations MAY support namespace wildcards (e.g. `'tools/*'`); this
+ * implementation supports the trailing-`/*` form.
  */
 export function matchesEvent(
-  interceptorEvents: readonly string[],
+  hookEvents: readonly string[],
   requestEvent: string,
 ): boolean {
-  for (const ev of interceptorEvents) {
+  for (const ev of hookEvents) {
     if (ev === InterceptorEvents.All) return true;
     if (ev === requestEvent) return true;
-    if (
-      (ev === InterceptorEvents.AllRequests ||
-        ev === InterceptorEvents.AllResponses) &&
-      !requestEvent.includes('/')
-    ) {
-      return true;
+    if (ev.endsWith('/*')) {
+      const prefix = ev.slice(0, -1); // keep the trailing '/'
+      if (requestEvent.startsWith(prefix)) return true;
     }
   }
   return false;

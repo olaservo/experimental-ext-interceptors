@@ -7,5 +7,4 @@ export * from './withInterceptors.js';
 export {
   ListInterceptorsRequestSchema,
   InvokeInterceptorRequestSchema,
-  ExecuteChainRequestSchema,
 } from './schemas.js';

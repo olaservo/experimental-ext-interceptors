@@ -7,12 +7,13 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { describe, expect, it } from 'vitest';
 import {
-  executeInterceptorChain,
+  executeRemoteChain,
   invokeInterceptor,
   listInterceptors,
 } from '../client/interceptorClientHelpers.js';
 import {
   InterceptorEvents,
+  MutationResult,
   ValidationResult,
 } from '../protocol/index.js';
 import { defineInterceptor } from './defineInterceptor.js';
@@ -26,15 +27,15 @@ async function spinUpInterceptorServer() {
 
   const echoer = defineInterceptor({
     name: 'echo-validator',
-    events: [InterceptorEvents.ToolsCall],
     type: 'validation',
+    events: [InterceptorEvents.ToolsCall],
     phase: 'request',
     invoke: () => ValidationResult.success(),
   });
   const blocker = defineInterceptor({
     name: 'blocker',
-    events: [InterceptorEvents.ResourcesRead],
     type: 'validation',
+    events: [InterceptorEvents.ResourcesRead],
     phase: 'request',
     invoke: ({ payload }) => {
       const uri =
@@ -49,8 +50,8 @@ async function spinUpInterceptorServer() {
   });
   const upper = defineInterceptor({
     name: 'upper-mutator',
-    events: [InterceptorEvents.ResourcesRead],
     type: 'mutation',
+    events: [InterceptorEvents.ResourcesRead],
     phase: 'response',
     invoke: ({ payload }) => {
       if (
@@ -58,21 +59,15 @@ async function spinUpInterceptorServer() {
         typeof payload !== 'object' ||
         !('contents' in payload)
       ) {
-        return { type: 'mutation', modified: false };
+        return MutationResult.unchanged(payload);
       }
       const contents = (payload as { contents?: Array<{ text?: string }> })
         .contents;
-      if (!Array.isArray(contents)) {
-        return { type: 'mutation', modified: false };
-      }
+      if (!Array.isArray(contents)) return MutationResult.unchanged(payload);
       const next = contents.map((c) =>
         typeof c.text === 'string' ? { ...c, text: c.text.toUpperCase() } : c,
       );
-      return {
-        type: 'mutation',
-        modified: true,
-        payload: { ...(payload as object), contents: next },
-      };
+      return MutationResult.mutated({ ...(payload as object), contents: next });
     },
   });
 
@@ -107,6 +102,11 @@ describe('withInterceptors — end-to-end via in-memory transport', () => {
         'blocker',
         'echo-validator',
         'upper-mutator',
+      ]);
+      // Each interceptor returns its hooks array (SEP-2624 shape).
+      const echo = list.interceptors.find((i) => i.name === 'echo-validator')!;
+      expect(echo.hooks).toEqual([
+        { events: [InterceptorEvents.ToolsCall], phase: 'request' },
       ]);
     } finally {
       await teardown();
@@ -147,10 +147,10 @@ describe('withInterceptors — end-to-end via in-memory transport', () => {
     }
   });
 
-  it('executes a chain that aborts on validation error', async () => {
+  it('SDK-side chain (executeRemoteChain) aborts on validation error', async () => {
     const { client, teardown } = await spinUpInterceptorServer();
     try {
-      const chain = await executeInterceptorChain(client, {
+      const chain = await executeRemoteChain([client], {
         event: InterceptorEvents.ResourcesRead,
         phase: 'request',
         payload: { uri: 'file:///etc/passwd' },
@@ -163,10 +163,10 @@ describe('withInterceptors — end-to-end via in-memory transport', () => {
     }
   });
 
-  it('executes a chain that mutates a response payload', async () => {
+  it('SDK-side chain mutates a response payload via interceptor/invoke', async () => {
     const { client, teardown } = await spinUpInterceptorServer();
     try {
-      const chain = await executeInterceptorChain(client, {
+      const chain = await executeRemoteChain([client], {
         event: InterceptorEvents.ResourcesRead,
         phase: 'response',
         payload: {
@@ -183,15 +183,15 @@ describe('withInterceptors — end-to-end via in-memory transport', () => {
     }
   });
 
-  it('advertises the interceptors capability in experimental.', async () => {
+  it('advertises capabilities.experimental.interceptor (singular per SEP)', async () => {
     const { client, teardown } = await spinUpInterceptorServer();
     try {
       const caps = client.getServerCapabilities();
       expect(caps?.experimental).toBeDefined();
       const ext = caps?.experimental as
-        | { interceptors?: { supportedEvents?: string[] } }
+        | { interceptor?: { supportedEvents?: string[] } }
         | undefined;
-      expect(ext?.interceptors?.supportedEvents).toEqual(
+      expect(ext?.interceptor?.supportedEvents).toEqual(
         expect.arrayContaining([
           InterceptorEvents.ToolsCall,
           InterceptorEvents.ResourcesRead,
