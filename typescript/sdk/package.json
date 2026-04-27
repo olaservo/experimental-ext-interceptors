@@ -43,7 +43,7 @@
     "README.md"
   ],
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.29.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -52,5 +52,8 @@
     "eslint": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }
