@@ -1,0 +1,23 @@
+{
+  "name": "@ext-modelcontextprotocol/skill-attribution-gateway-sample",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@ext-modelcontextprotocol/interceptors": "file:../..",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "js-yaml": "^4.1.0",
+    "zod": "^3.25.0 || ^4.0.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
