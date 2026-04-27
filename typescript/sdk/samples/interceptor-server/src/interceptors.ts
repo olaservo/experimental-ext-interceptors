@@ -5,7 +5,7 @@
 import {
   defineInterceptor,
   InterceptorEvents,
-  ObservabilityResult,
+  MutationResult,
   ValidationResult,
   type McpInterceptor,
 } from '@ext-modelcontextprotocol/interceptors';
@@ -26,8 +26,8 @@ export const piiValidator: McpInterceptor = defineInterceptor({
   name: 'pii-validator',
   description:
     'Blocks tool calls whose argument values match SSN or email patterns.',
-  events: [InterceptorEvents.ToolsCall],
   type: 'validation',
+  events: [InterceptorEvents.ToolsCall],
   phase: 'request',
   invoke: ({ payload }) => {
     const json = JSON.stringify(payload ?? {});
@@ -51,8 +51,8 @@ export const argLowercaser: McpInterceptor = defineInterceptor({
   name: 'arg-lowercaser',
   description:
     'Lowercases all string values in tool call arguments. Runs before any other mutation (priority -1000).',
-  events: [InterceptorEvents.ToolsCall],
   type: 'mutation',
+  events: [InterceptorEvents.ToolsCall],
   phase: 'request',
   priorityHint: -1000,
   invoke: ({ payload }) => {
@@ -61,12 +61,10 @@ export const argLowercaser: McpInterceptor = defineInterceptor({
       typeof payload !== 'object' ||
       !('arguments' in payload)
     ) {
-      return { type: 'mutation', modified: false, payload };
+      return MutationResult.unchanged(payload);
     }
     const params = payload as { name: string; arguments?: Record<string, unknown> };
-    if (!params.arguments) {
-      return { type: 'mutation', modified: false, payload };
-    }
+    if (!params.arguments) return MutationResult.unchanged(payload);
     let modified = false;
     const lowered: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(params.arguments)) {
@@ -78,21 +76,25 @@ export const argLowercaser: McpInterceptor = defineInterceptor({
         lowered[k] = v;
       }
     }
-    if (!modified) return { type: 'mutation', modified: false, payload };
-    return {
-      type: 'mutation',
-      modified: true,
-      payload: { ...params, arguments: lowered },
-    };
+    if (!modified) return MutationResult.unchanged(payload);
+    return MutationResult.mutated({ ...params, arguments: lowered });
   },
 });
 
+/**
+ * Audit-mode validator (the SEP-2624 idiom for an observer): never blocks,
+ * crashes don't abort the chain (`failOpen: true`). Logs to stderr per phase.
+ */
 export const toolCallLogger: McpInterceptor = defineInterceptor({
   name: 'tool-call-logger',
   description: 'Logs tool name and payload size for every tools/call.',
-  events: [InterceptorEvents.ToolsCall],
-  type: 'observability',
-  phase: 'both',
+  type: 'validation',
+  mode: 'audit',
+  failOpen: true,
+  hooks: [
+    { events: [InterceptorEvents.ToolsCall], phase: 'request' },
+    { events: [InterceptorEvents.ToolsCall], phase: 'response' },
+  ],
   invoke: ({ payload, phase }) => {
     const json = JSON.stringify(payload ?? {});
     const name =
@@ -102,7 +104,7 @@ export const toolCallLogger: McpInterceptor = defineInterceptor({
     process.stderr.write(
       `[interceptor] tools/call phase=${phase} name=${name} bytes=${json.length}\n`,
     );
-    return ObservabilityResult.success({ payloadBytes: json.length });
+    return ValidationResult.success();
   },
 });
 
@@ -114,8 +116,8 @@ export const resourceUriGuard: McpInterceptor = defineInterceptor({
   name: 'resource-uri-guard',
   description:
     'Blocks reads of URIs matching deny-list patterns (e.g. file:///etc/*, file:///**/.env).',
-  events: [InterceptorEvents.ResourcesRead],
   type: 'validation',
+  events: [InterceptorEvents.ResourcesRead],
   phase: 'request',
   invoke: ({ payload }) => {
     const uri =
@@ -139,20 +141,18 @@ export const secretRedactor: McpInterceptor = defineInterceptor({
   name: 'secret-redactor',
   description:
     'Redacts API-key-shaped strings from resource contents before they reach the caller.',
-  events: [InterceptorEvents.ResourcesRead],
   type: 'mutation',
+  events: [InterceptorEvents.ResourcesRead],
   phase: 'response',
   priorityHint: -500,
   invoke: ({ payload }) => {
     if (!payload || typeof payload !== 'object' || !('contents' in payload)) {
-      return { type: 'mutation', modified: false, payload };
+      return MutationResult.unchanged(payload);
     }
     const result = payload as {
       contents?: Array<{ uri?: string; mimeType?: string; text?: string }>;
     };
-    if (!Array.isArray(result.contents)) {
-      return { type: 'mutation', modified: false, payload };
-    }
+    if (!Array.isArray(result.contents)) return MutationResult.unchanged(payload);
     let modified = false;
     const nextContents = result.contents.map((c) => {
       if (typeof c.text !== 'string') return c;
@@ -161,21 +161,21 @@ export const secretRedactor: McpInterceptor = defineInterceptor({
       modified = true;
       return { ...c, text: redacted };
     });
-    if (!modified) return { type: 'mutation', modified: false, payload };
-    return {
-      type: 'mutation',
-      modified: true,
-      payload: { ...result, contents: nextContents },
-    };
+    if (!modified) return MutationResult.unchanged(payload);
+    return MutationResult.mutated({ ...result, contents: nextContents });
   },
 });
 
 export const resourceReadLogger: McpInterceptor = defineInterceptor({
   name: 'resource-read-logger',
   description: 'Logs URI and byte count for every resources/read.',
-  events: [InterceptorEvents.ResourcesRead],
-  type: 'observability',
-  phase: 'both',
+  type: 'validation',
+  mode: 'audit',
+  failOpen: true,
+  hooks: [
+    { events: [InterceptorEvents.ResourcesRead], phase: 'request' },
+    { events: [InterceptorEvents.ResourcesRead], phase: 'response' },
+  ],
   invoke: ({ payload, phase }) => {
     const json = JSON.stringify(payload ?? {});
     const uri =
@@ -185,7 +185,7 @@ export const resourceReadLogger: McpInterceptor = defineInterceptor({
     process.stderr.write(
       `[interceptor] resources/read phase=${phase} uri=${uri ?? '<n/a>'} bytes=${json.length}\n`,
     );
-    return ObservabilityResult.success({ payloadBytes: json.length });
+    return ValidationResult.success();
   },
 });
 

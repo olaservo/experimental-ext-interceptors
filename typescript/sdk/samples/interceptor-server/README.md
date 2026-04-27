@@ -1,15 +1,17 @@
 # Interceptor Server Sample
 
-A stdio MCP server that hosts six interceptors covering both `tools/call` and `resources/read`:
+A Streamable HTTP MCP server that hosts six interceptors covering both `tools/call` and `resources/read`:
 
-| Interceptor | Type | Event | Phase | Behavior |
-|---|---|---|---|---|
-| `pii-validator` | validation | `tools/call` | request | Block tool calls whose argument values match SSN or email patterns. |
-| `arg-lowercaser` | mutation | `tools/call` | request | Lowercase all string args. `priorityHint: -1000`. |
-| `tool-call-logger` | observability | `tools/call` | both | Log tool name + payload size to stderr. |
-| `resource-uri-guard` | validation | `resources/read` | request | Block reads of URIs matching `file:///etc/*` or `**/.env`. |
-| `secret-redactor` | mutation | `resources/read` | response | Redact API-key-shaped strings from `contents[].text`. |
-| `resource-read-logger` | observability | `resources/read` | both | Log URI + payload size to stderr. |
+| Interceptor | Type | Mode | Event | Phase | Behavior |
+|---|---|---|---|---|---|
+| `pii-validator` | validation | active | `tools/call` | request | Block tool calls whose argument values match SSN or email patterns. |
+| `arg-lowercaser` | mutation | active | `tools/call` | request | Lowercase all string args. `priorityHint: -1000`. |
+| `tool-call-logger` | validation | audit (`failOpen: true`) | `tools/call` | both | Log tool name + payload size to stderr. |
+| `resource-uri-guard` | validation | active | `resources/read` | request | Block reads of URIs matching `file:///etc/*` or `**/.env`. |
+| `secret-redactor` | mutation | active | `resources/read` | response | Redact API-key-shaped strings from `contents[].text`. |
+| `resource-read-logger` | validation | audit (`failOpen: true`) | `resources/read` | both | Log URI + payload size to stderr. |
+
+The two loggers are SEP-2624 audit-mode validators — the spec's idiom for non-blocking observers. They never fail the chain; crashes are swallowed.
 
 ## Run
 
@@ -17,49 +19,58 @@ A stdio MCP server that hosts six interceptors covering both `tools/call` and `r
 # from this directory
 npm install
 npm run build
-npm start                   # stdio server on stdin/stdout
-node dist/index.js --http=39817   # Streamable HTTP server on http://localhost:39817/mcp
+npm start                              # http://localhost:39817/mcp
+node dist/index.js --port=4000         # custom port
+node dist/index.js --port=4000 --path=/api/mcp
 ```
 
-Or run directly via tsx:
+Or directly via tsx (no build step):
 
 ```bash
-npm run dev                       # stdio
-npx tsx src/index.ts --http=39817 # HTTP
+npm run dev
 ```
 
-Two end-to-end smoke tests are checked in:
+The server runs in stateless mode: each POST gets a fresh `Server` + `StreamableHTTPServerTransport` pair, mirroring the SDK's `simpleStatelessStreamableHttp` example. `GET` and `DELETE` return 405 — only `POST` is supported.
 
-- `node smoke-test.mjs` — spawns the server over stdio and exercises every interceptor.
-- `node smoke-test-http.mjs [url]` — connects to a running HTTP server (default `http://localhost:39817/mcp`) and exercises the same flows.
+## Smoke test
 
-The HTTP variant runs in stateless mode (no `sessionIdGenerator`): each POST gets a fresh `Server` + `StreamableHTTPServerTransport` pair, mirroring the SDK's `simpleStatelessStreamableHttp` example. `GET` and `DELETE` return 405 — only `POST` is supported.
+`smoke-test.mjs` connects to a running HTTP server (default `http://localhost:39817/mcp`) and exercises every interceptor end-to-end.
 
-## Standalone client smoke test
+```bash
+npm start &                # in one shell
+node smoke-test.mjs        # in another
+```
 
-Connect a plain `Client` (over `StdioClientTransport` pointing at this sample) and exercise the SEP methods directly:
+Or against a custom URL:
+
+```bash
+node smoke-test.mjs http://my-host:8080/mcp
+```
+
+## Standalone client example
+
+Connect a plain `Client` over `StreamableHTTPClientTransport` and exercise the SEP methods directly:
 
 ```ts
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {
-  executeInterceptorChain,
+  executeRemoteChain,
   listInterceptors,
 } from '@ext-modelcontextprotocol/interceptors';
 
-const transport = new StdioClientTransport({
-  command: 'node',
-  args: ['dist/index.js'],
-});
+const transport = new StreamableHTTPClientTransport(
+  new URL('http://localhost:39817/mcp'),
+);
 const client = new Client({ name: 'demo-client', version: '0.1.0' });
 await client.connect(transport);
 
-// Lists all 6 interceptors.
+// Discover.
 const list = await listInterceptors(client);
 console.log(list.interceptors.map((i) => i.name));
 
 // resources/read request phase: deny-listed URI is blocked.
-const blocked = await executeInterceptorChain(client, {
+const blocked = await executeRemoteChain([client], {
   event: 'resources/read',
   phase: 'request',
   payload: { uri: 'file:///etc/passwd' },
@@ -68,7 +79,7 @@ console.log(blocked.status);                 // 'validation_failed'
 console.log(blocked.abortedAt?.interceptor); // 'resource-uri-guard'
 
 // resources/read response phase: secret in contents is redacted.
-const redacted = await executeInterceptorChain(client, {
+const redacted = await executeRemoteChain([client], {
   event: 'resources/read',
   phase: 'response',
   payload: {
@@ -80,6 +91,8 @@ const redacted = await executeInterceptorChain(client, {
 console.log(redacted.status);                 // 'success'
 console.log((redacted.finalPayload as any).contents[0].text); // contains '[REDACTED]'
 ```
+
+`executeRemoteChain` is the SDK-side helper per SEP-2624 — chain execution is local; remote interceptors are reached via repeated `interceptor/invoke` calls.
 
 ## Wrapped-client demo (`InterceptingClient`)
 
