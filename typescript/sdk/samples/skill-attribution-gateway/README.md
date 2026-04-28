@@ -14,11 +14,9 @@ For every `resources/read` whose URI ends in `/SKILL.md`, the gateway:
 ## When you might want this
 
 - **Organisations with a skill compliance policy** — auditors need a record of which skills were used, when, by whom, and whether they declared an author/license. The interceptor produces that record at the chokepoint without modifying the skill server.
-- **Operators of multi-tenant skill catalogues** — when you proxy multiple upstream skill servers and want a single normalisation point for attribution, instead of asking every upstream to add `_meta` fields.
+- **Operators of multi-tenant skill catalogues** — when you proxy multiple upstream skill servers and want a single chokepoint that audits attribution and emits a normalised audit stream, without having to chase down every upstream to fix non-compliant skills.
 - **Hosts that can't be modified** — Claude Desktop, Cursor, IDE plugins, etc. don't surface attribution natively. A gateway in front of the skill server is a way to attach the behavior without touching the host.
 - **A research seam for downstream tooling** — the audit records are the data any future compensation, marketplace-feedback, or popularity-ranking system would consume. Building those systems is out of scope here; producing the data they'd need is the point.
-
-If you control the skill server and have one host, you don't need this — just put `_meta["io.modelcontextprotocol.skills/author"]` on your read responses directly.
 
 ## What gets validated
 
@@ -118,8 +116,11 @@ In a deployed setup the principal would come from auth on the host's incoming re
 
 - **Trust**: any party between a host and a skill server can claim "this skill is authored by X." The gateway makes the assertion visible; it doesn't prove it. Cryptographic provenance needs SEP-2624's `signature` field, still reserved for future use.
 - **Enforcement**: the validator only reports. Hosts can ignore `warn`/`info` results entirely. Hard enforcement requires either (a) the gateway treating `warn` as blocking, or (b) host-side UI conventions that surface compliance levels.
-- **Frontmatter only**: if a skill server already publishes `_meta["io.modelcontextprotocol.skills/author"]`, that's authoritative — but this validator parses the SKILL.md body. A small extension would prefer `_meta` when present and fall back to frontmatter.
 - **One read at a time**: a skill that itself invokes other skills doesn't get composite attribution from this validator. End-to-end provenance through skill chains needs request correlation that doesn't exist yet.
+
+## Why frontmatter, not `_meta`
+
+The validator reads YAML frontmatter rather than `_meta` because skill-level metadata (author, license, version) belongs in frontmatter per the [skills `_meta` keys recommendations](https://github.com/modelcontextprotocol/experimental-ext-skills/blob/main/docs/skill-meta-keys.md) proposed by the Skills Over MCP Working Group.
 
 ## SEP relationship
 
