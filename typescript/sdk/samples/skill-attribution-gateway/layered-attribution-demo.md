@@ -39,6 +39,41 @@ Audit records land on stderr in real time, in the order above (preceded by three
 
 For a manual walkthrough, point any MCP client at the gateway and read the four `SKILL.md` URIs in order — the `[skill-attribution] {…}` lines on stderr are the demo.
 
+## Tailing the audit ledger
+
+Each `resources/read` lands one JSON line on stderr, prefixed `[skill-attribution]`. The prefix exists so a downstream filter can pick those lines out without having to parse structured logs.
+
+The simplest durable ledger is a JSONL file via stderr redirect:
+
+```bash
+npm start 2> audit.jsonl
+```
+
+For a live pretty-printed scroll *and* a clean JSONL file at once:
+
+```bash
+npm start 2>&1 >/dev/null \
+  | grep '^\[skill-attribution\]' \
+  | sed 's/^\[skill-attribution\] //' \
+  | tee audit.jsonl \
+  | jq .
+```
+
+Useful one-liners against `audit.jsonl`:
+
+```bash
+# Every non-compliant read
+jq 'select(.complianceLevel == "non-compliant")' audit.jsonl
+
+# Compact chain-shape projection (skill + level + chain depth)
+jq '{skill: .skill.name, level: .complianceLevel, depth: (.attribution.derived_from // [] | length)}' audit.jsonl
+
+# Just the layered cases
+jq 'select(.complianceLevel == "compliant_with_upstream_attribution") | {skill: .skill.name, chain: [.attribution.derived_from[].relationship]}' audit.jsonl
+```
+
+A real deployment would replace the file with a proper collector (SQLite, OTLP, S3, the auditing system of your choice) — but for a demo on short notice, JSONL + `jq` plays better than wiring up a SQL prompt or a network sink that can fail in front of an audience.
+
 ## What this demo deliberately does not show
 
 For honesty when fielding questions:
