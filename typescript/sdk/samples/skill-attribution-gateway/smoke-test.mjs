@@ -70,6 +70,104 @@ description: A skill someone wrote
 Body.
 `,
   },
+  // Layered TTRPG fixtures — mirror the real SKILL.md frontmatter shipped in
+  // bellagio/agent-skills-ttrpg-demo/mcp/fallout-helper/skills/fallout-ttrpg/.
+  // Each one exercises a different complianceLevel for the demo scroll.
+  falloutRpg: {
+    uri: 'skill://olaservo/fallout-helper/fallout-rpg/SKILL.md',
+    text: `---
+name: fallout-rpg
+description: Run, GM, or adjudicate Fallout - The Roleplaying Game (Modiphius 2d20 system).
+version: 1.0.0
+author:
+  name: Ola Hungerford
+license: CC-BY-4.0
+source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
+derived_from:
+  - title: "Fallout: The Roleplaying Game (Core Rulebook)"
+    publisher: Modiphius Entertainment
+    year: 2021
+    relationship: system
+    license: proprietary
+    rights_basis: fair_use_reading_aid
+    url: https://www.modiphius.net/products/fallout-the-roleplaying-game
+---
+
+Body.
+`,
+  },
+  falloutMachineFrequency: {
+    uri: 'skill://olaservo/fallout-helper/fallout-machine-frequency/SKILL.md',
+    text: `---
+name: fallout-machine-frequency
+description: Run or GM "Machine Frequency", a three-act Fallout - The Roleplaying Game adventure module.
+version: 0.2.0
+author:
+  name: Ola Hungerford
+license: CC-BY-NC-SA-4.0
+source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-machine-frequency
+derived_from:
+  - title: "Fallout: The Roleplaying Game (Core Rulebook)"
+    publisher: Modiphius Entertainment
+    year: 2021
+    relationship: system
+    license: proprietary
+    rights_basis: fair_use_reading_aid
+    url: https://www.modiphius.net/products/fallout-the-roleplaying-game
+  - title: "Fallout: The Roleplaying Game — Adventure Module Chapter Three: Machine Frequency"
+    publisher: Modiphius Entertainment
+    year: 2022
+    relationship: adventure
+    license: proprietary
+    rights_basis: fair_use_reading_aid
+---
+
+Body.
+`,
+  },
+  falloutCharacterSheets: {
+    uri: 'skill://olaservo/fallout-helper/fallout-character-sheets/SKILL.md',
+    text: `---
+name: fallout-character-sheets
+description: Pre-generated player characters for Fallout - The Roleplaying Game (Modiphius 2d20).
+version: 1.0.0
+author:
+  name: Ola Hungerford
+license: CC-BY-4.0
+source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-character-sheets
+derived_from:
+  - title: "Fallout: The Roleplaying Game (Core Rulebook)"
+    publisher: Modiphius Entertainment
+    year: 2021
+    relationship: system
+    license: proprietary
+    rights_basis: fair_use_reading_aid
+    url: https://www.modiphius.net/products/fallout-the-roleplaying-game
+  - title: "fallout-rpg"
+    publisher: Ola Hungerford
+    year: 2026
+    relationship: system_encoding
+    license: CC-BY-4.0
+    url: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
+own_contributions:
+  - Six original pre-generated player characters with full sheets, biographies, and inventories
+  - Picker logic for matching players to characters by play style
+  - Composition guidance for pairing the party with the fallout-machine-frequency adventure
+---
+
+Body.
+`,
+  },
+  falloutUncreditedEncounters: {
+    uri: 'skill://olaservo/fallout-helper/fallout-uncredited-encounters/SKILL.md',
+    text: `---
+name: fallout-uncredited-encounters
+description: A table of random wasteland encounters for Fallout 2d20.
+---
+
+Body.
+`,
+  },
 };
 
 function readResultFor(skillKey) {
@@ -161,6 +259,95 @@ assert.equal(noAuthor.validationSummary?.warnings, 2);
 const noAuthorResult = noAuthor.results[0];
 assert.equal(noAuthorResult.info.complianceLevel, 'non-compliant');
 assert.equal(noAuthorResult.info.requester.type, 'anonymous');
+
+// ---------------------------------------------------------------------------
+// Layered TTRPG fixtures — demonstrate the four compliance levels in order.
+// The visible argument: the same primitive that records compliance also
+// records non-compliance, and discriminates between *kinds* of compliance
+// (one-deep vs two-deep, encoded module vs original creative work).
+// ---------------------------------------------------------------------------
+
+// Fixture 1 — fallout-rpg: one-deep chain (Modiphius system).
+const falloutRpg = await chainFor('falloutRpg', {
+  type: 'user',
+  id: 'gm@example.com',
+});
+console.log('falloutRpg:', falloutRpg.status, falloutRpg.validationSummary);
+assert.equal(falloutRpg.status, 'success');
+const falloutRpgResult = falloutRpg.results[0];
+assert.equal(
+  falloutRpgResult.info.complianceLevel,
+  'compliant_with_upstream_attribution',
+);
+assert.equal(falloutRpgResult.info.attribution.derived_from.length, 1);
+assert.equal(
+  falloutRpgResult.info.attribution.derived_from[0].relationship,
+  'system',
+);
+
+// Fixture 2 — machine-frequency: two-deep chain (system + adventure module).
+const machineFreq = await chainFor('falloutMachineFrequency', {
+  type: 'user',
+  id: 'gm@example.com',
+});
+console.log(
+  'falloutMachineFrequency:',
+  machineFreq.status,
+  machineFreq.validationSummary,
+);
+assert.equal(machineFreq.status, 'success');
+const machineFreqResult = machineFreq.results[0];
+assert.equal(
+  machineFreqResult.info.complianceLevel,
+  'compliant_with_upstream_attribution',
+);
+assert.equal(machineFreqResult.info.attribution.derived_from.length, 2);
+assert.equal(
+  machineFreqResult.info.attribution.derived_from[1].relationship,
+  'adventure',
+);
+
+// Fixture 3 — character-sheets: same chain depth as fixture 2, fundamentally
+// different rights story (original PCs encoding the licensed system).
+const charSheets = await chainFor('falloutCharacterSheets', {
+  type: 'user',
+  id: 'gm@example.com',
+});
+console.log(
+  'falloutCharacterSheets:',
+  charSheets.status,
+  charSheets.validationSummary,
+);
+assert.equal(charSheets.status, 'success');
+const charSheetsResult = charSheets.results[0];
+assert.equal(
+  charSheetsResult.info.complianceLevel,
+  'compliant_with_upstream_attribution',
+);
+assert.equal(charSheetsResult.info.attribution.derived_from.length, 2);
+assert.equal(
+  charSheetsResult.info.attribution.derived_from[1].relationship,
+  'system_encoding',
+);
+
+// Fixture 4 — uncredited-encounters: control case, non-compliant.
+const uncredited = await chainFor('falloutUncreditedEncounters', {
+  type: 'anonymous',
+});
+console.log(
+  'falloutUncreditedEncounters:',
+  uncredited.status,
+  uncredited.validationSummary,
+);
+assert.equal(uncredited.status, 'success');
+const uncreditedResult = uncredited.results[0];
+assert.equal(uncreditedResult.info.complianceLevel, 'non-compliant');
+assert.ok(
+  uncreditedResult.messages.some(
+    (m) =>
+      m.path === '$.frontmatter.derived_from' && m.severity === 'info',
+  ),
+);
 
 // Non-skill resource → pass-through (the validator only opines on SKILL.md).
 const nonSkill = await executeRemoteChain([client], {

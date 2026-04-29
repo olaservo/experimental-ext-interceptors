@@ -43,6 +43,7 @@ interface Frontmatter {
   citations?: unknown;
   references?: unknown;
   version?: string;
+  derived_from?: unknown;
   [k: string]: unknown;
 }
 
@@ -74,6 +75,7 @@ interface AuditTuple {
     source?: string;
     citations?: unknown;
     version?: string;
+    derived_from?: unknown;
   };
   requester?: {
     type?: string;
@@ -82,7 +84,11 @@ interface AuditTuple {
   };
   traceId?: string;
   observedAt: string;
-  complianceLevel: 'compliant' | 'partial' | 'non-compliant';
+  complianceLevel:
+    | 'compliant_with_upstream_attribution'
+    | 'compliant'
+    | 'partial'
+    | 'non-compliant';
 }
 
 /**
@@ -93,7 +99,7 @@ interface AuditTuple {
  * Severity policy (deliberately non-blocking):
  * - Missing `author` or `license`     → `warn`
  * - Missing `source` / `citations` /
- *   `version`                          → `info`
+ *   `version` / `derived_from`         → `info`
  * - Body has no YAML frontmatter at all → `error` (this is a SEP-2640
  *   conformance failure, not just an attribution gap)
  *
@@ -154,6 +160,7 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
           source: fm.source ?? fm.homepage ?? fm.repository,
           citations: fm.citations ?? fm.references,
           version: fm.version,
+          derived_from: fm.derived_from,
         };
 
         if (!fm.author) {
@@ -196,14 +203,33 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
             severity: 'info',
           });
         }
+        if (
+          !Array.isArray(fm.derived_from) ||
+          (fm.derived_from as unknown[]).length === 0
+        ) {
+          messages.push({
+            path: '$.frontmatter.derived_from',
+            message:
+              'Skill declares no `derived_from` — upstream chain undeclared.',
+            severity: 'info',
+          });
+        }
 
         const hasAuthor = !!fm.author;
         const hasLicense = !!fm.license;
-        if (hasAuthor && hasLicense) {
-          complianceLevel = attribution.source ? 'compliant' : 'partial';
-        } else if (hasAuthor || hasLicense) {
-          complianceLevel = 'partial';
-        }
+        const hasSource = !!attribution.source;
+        const hasDerivedFrom =
+          Array.isArray(fm.derived_from) &&
+          (fm.derived_from as unknown[]).length > 0;
+
+        complianceLevel =
+          hasAuthor && hasLicense && hasSource && hasDerivedFrom
+            ? 'compliant_with_upstream_attribution'
+            : hasAuthor && hasLicense && hasSource
+              ? 'compliant'
+              : hasAuthor || hasLicense
+                ? 'partial'
+                : 'non-compliant';
       }
     }
 

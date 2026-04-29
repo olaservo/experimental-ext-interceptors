@@ -29,12 +29,14 @@ The interceptor fires on `resources/read` **response** phase for any URI ending 
 | `source` / `homepage` / `repository` | "provenance unverifiable" | `info` |
 | `citations` / `references` | "outside material unattributed" | `info` |
 | `version` | "reproducibility harder" | `info` |
+| `derived_from` | "upstream chain undeclared" | `info` |
 | _(no frontmatter at all)_ | "fails SEP-2640 conformance" | `error` |
 
 Per SEP-2624, only `error` blocks the chain. `warn` and `info` are non-blocking by default.
 
 The compliance level reported on each read is one of:
 
+- `compliant_with_upstream_attribution` — `compliant` plus a non-empty `derived_from` chain
 - `compliant` — author + license + source all present
 - `partial` — author and/or license present
 - `non-compliant` — neither author nor license present
@@ -45,12 +47,36 @@ For every skill `resources/read` the validator passes through, it emits a one-li
 
 ```json
 {
-  "skill":           { "uri": "skill://acme/billing/refunds/SKILL.md", "name": "refunds" },
-  "attribution":     { "author": "Jane Doe", "license": "Apache-2.0", "source": "...", "version": "1.2.0" },
+  "skill":           { "uri": "skill://olaservo/fallout-helper/fallout-character-sheets/SKILL.md", "name": "fallout-character-sheets" },
+  "attribution": {
+    "author":  { "name": "Ola Hungerford" },
+    "license": "CC-BY-4.0",
+    "source":  "https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-character-sheets",
+    "version": "1.0.0",
+    "derived_from": [
+      {
+        "title":        "Fallout: The Roleplaying Game (Core Rulebook)",
+        "publisher":    "Modiphius Entertainment",
+        "year":         2021,
+        "relationship": "system",
+        "license":      "proprietary",
+        "rights_basis": "fair_use_reading_aid",
+        "url":          "https://www.modiphius.net/products/fallout-the-roleplaying-game"
+      },
+      {
+        "title":        "fallout-rpg",
+        "publisher":    "Ola Hungerford",
+        "year":         2026,
+        "relationship": "system_encoding",
+        "license":      "CC-BY-4.0",
+        "url":          "https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg"
+      }
+    ]
+  },
   "requester":       { "type": "user", "id": "alice@example.com" },
   "traceId":         "trace-...",
   "observedAt":      "2026-04-27T...",
-  "complianceLevel": "compliant"
+  "complianceLevel": "compliant_with_upstream_attribution"
 }
 ```
 
@@ -80,7 +106,7 @@ Or directly via tsx (no build step):
 npm run dev
 ```
 
-Smoke test (covers all three compliance levels, plus an `InterceptingClient`-wrapped backend) against a running gateway:
+Smoke test (covers all four compliance levels, including the layered TTRPG fixtures, plus an `InterceptingClient`-wrapped backend) against a running gateway:
 
 ```bash
 npm start &                # in one shell
