@@ -106,7 +106,7 @@ Or directly via tsx (no build step):
 npm run dev
 ```
 
-Smoke test (covers all four compliance levels, including the layered TTRPG fixtures, plus an `InterceptingClient`-wrapped backend) against a running gateway:
+Smoke test (covers all four compliance levels, including the layered TTRPG fixtures, plus an `InterceptingClient`-wrapped backend) against a running gateway. See [`layered-attribution-demo.md`](./layered-attribution-demo.md) for the demo walkthrough the smoke test mirrors.
 
 ```bash
 npm start &                # in one shell
