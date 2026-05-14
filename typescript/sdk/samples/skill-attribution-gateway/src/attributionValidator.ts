@@ -36,6 +36,7 @@ interface Frontmatter {
   name?: string;
   description?: string;
   author?: string | { name?: string; email?: string; url?: string };
+  skill_author?: string | { name?: string; email?: string; url?: string };
   license?: string;
   source?: string;
   homepage?: string;
@@ -44,6 +45,10 @@ interface Frontmatter {
   references?: unknown;
   version?: string;
   derived_from?: unknown;
+  sources?: unknown;
+  attribution?: unknown;
+  depends_on?: unknown;
+  own_contributions?: unknown;
   [k: string]: unknown;
 }
 
@@ -75,7 +80,10 @@ interface AuditTuple {
     source?: string;
     citations?: unknown;
     version?: string;
-    derived_from?: unknown;
+    sources?: unknown;
+    runtime_attribution?: string;
+    depends_on?: unknown;
+    own_contributions?: unknown;
   };
   requester?: {
     type?: string;
@@ -96,10 +104,15 @@ interface AuditTuple {
  * SKILL.md frontmatter for attribution fields and records a per-read audit
  * tuple combining the skill identity and the requester (`context.principal`).
  *
+ * Field shape: the validator reads the layered-attribution shape
+ * (`skill_author`, `sources[]`, `attribution`, `depends_on`,
+ * `own_contributions`) and falls back to the older flat shape (`author`,
+ * `derived_from[]`) so legacy SKILL.md files keep grading the same.
+ *
  * Severity policy (deliberately non-blocking):
- * - Missing `author` or `license`     → `warn`
+ * - Missing `skill_author`/`author` or `license` → `warn`
  * - Missing `source` / `citations` /
- *   `version` / `derived_from`         → `info`
+ *   `version` / `sources` (or legacy `derived_from`) → `info`
  * - Body has no YAML frontmatter at all → `error` (this is a SEP-2640
  *   conformance failure, not just an attribution gap)
  *
@@ -110,7 +123,7 @@ interface AuditTuple {
 export const skillAttributionValidator: McpInterceptor = defineInterceptor({
   name: 'skill-attribution-validator',
   description:
-    'Validates SEP-2640 skill manifests carry attribution (author, license, source) and records a (skill, author, requester, ts) audit tuple.',
+    'Validates SEP-2640 skill manifests carry attribution (skill_author, license, source, sources[]) and records a (skill, author, requester, ts) audit tuple.',
   events: [InterceptorEvents.ResourcesRead],
   type: 'validation',
   phase: 'response',
@@ -154,20 +167,40 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
           severity: 'error',
         });
       } else {
+        // Layered-attribution shape takes precedence; legacy fields are the
+        // fallback so existing SKILL.md files keep grading the same.
+        const author = fm.skill_author ?? fm.author;
+        const chain = Array.isArray(fm.sources)
+          ? (fm.sources as unknown[])
+          : Array.isArray(fm.derived_from)
+            ? (fm.derived_from as unknown[])
+            : undefined;
+        const runtimeAttribution =
+          typeof fm.attribution === 'string' ? fm.attribution : undefined;
+        const dependsOn = Array.isArray(fm.depends_on)
+          ? (fm.depends_on as unknown[])
+          : undefined;
+        const ownContributions = Array.isArray(fm.own_contributions)
+          ? (fm.own_contributions as unknown[])
+          : undefined;
+
         attribution = {
-          author: fm.author,
+          author,
           license: fm.license,
           source: fm.source ?? fm.homepage ?? fm.repository,
           citations: fm.citations ?? fm.references,
           version: fm.version,
-          derived_from: fm.derived_from,
+          sources: chain,
+          runtime_attribution: runtimeAttribution,
+          depends_on: dependsOn,
+          own_contributions: ownContributions,
         };
 
-        if (!fm.author) {
+        if (!author) {
           messages.push({
-            path: '$.frontmatter.author',
+            path: '$.frontmatter.skill_author',
             message:
-              'Skill is missing `author` — attribution credit cannot be assigned.',
+              'Skill is missing `skill_author` (or legacy `author`) — attribution credit cannot be assigned.',
             severity: 'warn',
           });
         }
@@ -203,27 +236,22 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
             severity: 'info',
           });
         }
-        if (
-          !Array.isArray(fm.derived_from) ||
-          (fm.derived_from as unknown[]).length === 0
-        ) {
+        if (!chain || chain.length === 0) {
           messages.push({
-            path: '$.frontmatter.derived_from',
+            path: '$.frontmatter.sources',
             message:
-              'Skill declares no `derived_from` — upstream chain undeclared.',
+              'Skill declares no `sources` (or legacy `derived_from`) — upstream chain undeclared.',
             severity: 'info',
           });
         }
 
-        const hasAuthor = !!fm.author;
+        const hasAuthor = !!author;
         const hasLicense = !!fm.license;
         const hasSource = !!attribution.source;
-        const hasDerivedFrom =
-          Array.isArray(fm.derived_from) &&
-          (fm.derived_from as unknown[]).length > 0;
+        const hasChain = !!chain && chain.length > 0;
 
         complianceLevel =
-          hasAuthor && hasLicense && hasSource && hasDerivedFrom
+          hasAuthor && hasLicense && hasSource && hasChain
             ? 'compliant_with_upstream_attribution'
             : hasAuthor && hasLicense && hasSource
               ? 'compliant'

@@ -24,19 +24,25 @@ The interceptor fires on `resources/read` **response** phase for any URI ending 
 
 | Frontmatter field | If missing | Severity |
 |---|---|---|
-| `author` | "credit can't be assigned" | `warn` |
+| `skill_author` (or legacy `author`) | "credit can't be assigned" | `warn` |
 | `license` | "reuse rights unclear" | `warn` |
 | `source` / `homepage` / `repository` | "provenance unverifiable" | `info` |
 | `citations` / `references` | "outside material unattributed" | `info` |
 | `version` | "reproducibility harder" | `info` |
-| `derived_from` | "upstream chain undeclared" | `info` |
+| `sources` (or legacy `derived_from`) | "upstream chain undeclared" | `info` |
 | _(no frontmatter at all)_ | "fails SEP-2640 conformance" | `error` |
 
 Per SEP-2624, only `error` blocks the chain. `warn` and `info` are non-blocking by default.
 
+The validator also reads three layered-attribution fields and surfaces them verbatim in the audit record (without grading them):
+
+- `attribution` — a multi-line string hosts SHOULD render at session start; emitted as `attribution.runtime_attribution`.
+- `depends_on` — sibling skills this skill composes with at runtime.
+- `own_contributions` — original creative work that coexists with declared derivation.
+
 The compliance level reported on each read is one of:
 
-- `compliant_with_upstream_attribution` — `compliant` plus a non-empty `derived_from` chain
+- `compliant_with_upstream_attribution` — `compliant` plus a non-empty `sources` chain (legacy `derived_from` also accepted)
 - `compliant` — author + license + source all present
 - `partial` — author and/or license present
 - `non-compliant` — neither author nor license present
@@ -49,28 +55,37 @@ For every skill `resources/read` the validator passes through, it emits a one-li
 {
   "skill":           { "uri": "skill://olaservo/fallout-helper/fallout-character-sheets/SKILL.md", "name": "fallout-character-sheets" },
   "attribution": {
-    "author":  { "name": "Ola Hungerford" },
+    "author":  { "name": "Ola Hungerford", "url": "https://github.com/olaservo" },
     "license": "CC-BY-4.0",
     "source":  "https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-character-sheets",
     "version": "1.0.0",
-    "derived_from": [
+    "sources": [
+      {
+        "title":        "fallout-rpg (sibling skill)",
+        "publisher":    "Ola Hungerford",
+        "url":          "https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg",
+        "relationship": "system_encoding",
+        "rights_basis": "license_grant",
+        "license":      "CC-BY-4.0",
+        "covers":       "2d20 mechanics (S.P.E.C.I.A.L., skills, perks, AP, Luck, combat resolution)"
+      },
       {
         "title":        "Fallout: The Roleplaying Game (Core Rulebook)",
         "publisher":    "Modiphius Entertainment",
+        "ip_holder":    "Bethesda Softworks",
         "year":         2021,
-        "relationship": "system",
-        "license":      "proprietary",
-        "rights_basis": "fair_use_reading_aid",
-        "url":          "https://www.modiphius.net/products/fallout-the-roleplaying-game"
-      },
-      {
-        "title":        "fallout-rpg",
-        "publisher":    "Ola Hungerford",
-        "year":         2026,
-        "relationship": "system_encoding",
-        "license":      "CC-BY-4.0",
-        "url":          "https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg"
+        "url":          "https://www.modiphius.net/products/fallout-the-roleplaying-game",
+        "relationship": "trademark_setting_vocabulary",
+        "rights_basis": "fair_use_claim",
+        "covers":       "Fallout-universe origins and trademark terms used in pregen backgrounds"
       }
+    ],
+    "runtime_attribution": "Six pre-generated player characters by Ola Hungerford, licensed CC-BY-4.0...",
+    "depends_on":         ["fallout-rpg"],
+    "own_contributions":  [
+      "Six original pre-generated player characters with full sheets, biographies, and inventories",
+      "Picker logic for matching players to characters by play style",
+      "Composition guidance for pairing the party with the fallout-machine-frequency adventure"
     ]
   },
   "requester":       { "type": "user", "id": "alice@example.com" },
