@@ -72,10 +72,10 @@ Body.
   },
   // Layered TTRPG fixtures — mirror the real SKILL.md frontmatter shipped in
   // bellagio/agent-skills-ttrpg-demo/mcp/fallout-helper/skills/fallout-ttrpg/.
-  // Each one exercises a different complianceLevel for the demo scroll.
-  // Uses the layered-attribution schema (skill_author + sources[] +
-  // attribution); the gateway also accepts the legacy author/derived_from
-  // names, exercised by the `clean` / `missingLicense` /
+  // Each one exercises a different complianceLevel for the demo scroll. These
+  // fixtures use the spec-compliant shape (custom fields nested under
+  // `metadata` per the Agent Skills spec); the gateway also accepts the
+  // legacy top-level shape, exercised by the `clean` / `missingLicense` /
   // `missingAuthorAndLicense` fixtures above.
   falloutRpg: {
     uri: 'skill://olaservo/fallout-helper/fallout-rpg/SKILL.md',
@@ -83,31 +83,32 @@ Body.
 name: fallout-rpg
 description: Run, GM, or adjudicate Fallout - The Roleplaying Game (Modiphius 2d20 system, Bethesda's Fallout IP).
 license: See LICENSE.txt
-version: 0.1.0
-skill_author: olaservo
-source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
-sources:
-  - title: 2d20 System Reference Document
-    publisher: Modiphius Entertainment
-    url: https://www.drivethrurpg.com/en/product/403658/2d20-system-reference-document
-    rights_basis: license_grant
-    covers: 2d20 mechanics - resolution loop, skill tests, AP economy, complications, Combat Dice
-  - title: "Fallout: The Roleplaying Game - Quickstart Guide"
-    publisher: Modiphius Entertainment
-    ip_holder: Bethesda Softworks
-    url: https://modiphius.us/collections/fallout-the-roleplaying-game/products/fallout-the-roleplaying-game-quickstart-guide-pdf-free
-    rights_basis: fair_use_claim
-    covers: Fallout-specific overlays - S.P.E.C.I.A.L., hit-location chart, sample pregens, Pip-Boy UI theming
-  - title: "Fallout: The Roleplaying Game - Core Rulebook"
-    publisher: Modiphius Entertainment
-    ip_holder: Bethesda Softworks
-    rights_basis: fair_use_claim
-    covers: combat chapter detail, full character creation, perks and gear
-attribution: |
-  Unofficial fan project. Mechanics adapted from the 2d20 System Reference
-  Document by Modiphius Entertainment. Fallout-specific elements summarized
-  from Fallout: The Roleplaying Game by Modiphius Entertainment under license
-  from Bethesda Softworks.
+metadata:
+  version: 0.1.0
+  skill_author: olaservo
+  source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
+  sources:
+    - title: 2d20 System Reference Document
+      publisher: Modiphius Entertainment
+      url: https://www.drivethrurpg.com/en/product/403658/2d20-system-reference-document
+      rights_basis: license_grant
+      covers: 2d20 mechanics - resolution loop, skill tests, AP economy, complications, Combat Dice
+    - title: "Fallout: The Roleplaying Game - Quickstart Guide"
+      publisher: Modiphius Entertainment
+      ip_holder: Bethesda Softworks
+      url: https://modiphius.us/collections/fallout-the-roleplaying-game/products/fallout-the-roleplaying-game-quickstart-guide-pdf-free
+      rights_basis: fair_use_claim
+      covers: Fallout-specific overlays - S.P.E.C.I.A.L., hit-location chart, sample pregens, Pip-Boy UI theming
+    - title: "Fallout: The Roleplaying Game - Core Rulebook"
+      publisher: Modiphius Entertainment
+      ip_holder: Bethesda Softworks
+      rights_basis: fair_use_claim
+      covers: combat chapter detail, full character creation, perks and gear
+  attribution: |
+    Unofficial fan project. Mechanics adapted from the 2d20 System Reference
+    Document by Modiphius Entertainment. Fallout-specific elements summarized
+    from Fallout: The Roleplaying Game by Modiphius Entertainment under license
+    from Bethesda Softworks.
 ---
 
 Body.
@@ -119,32 +120,33 @@ Body.
 name: fallout-machine-frequency
 description: Run or GM "Machine Frequency", a three-act Fallout - The Roleplaying Game adventure module.
 license: CC-BY-NC-SA-4.0
-version: 0.2.0
-skill_author:
-  name: Ola Hungerford
-  url: https://github.com/olaservo
-source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-machine-frequency
-depends_on:
-  - fallout-rpg
-sources:
-  - title: fallout-rpg (sibling skill)
-    publisher: Ola Hungerford
-    url: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
-    relationship: system_encoding
-    rights_basis: license_grant
-    license: CC-BY-4.0
-    covers: 2d20 mechanics referenced in stat blocks, skill tests, and combat encounters
-  - title: "Fallout: The Roleplaying Game - Adventure Module Chapter Three: Machine Frequency"
-    publisher: Modiphius Entertainment
-    ip_holder: Bethesda Softworks
-    year: 2022
-    relationship: adventure_reading_aid
-    rights_basis: fair_use_reading_aid
-    covers: adventure structure, location summaries, NPC roles, plot beats, GM gotchas
-attribution: |
-  Structural encoding of the Machine Frequency adventure for Fallout: The
-  Roleplaying Game (Modiphius Entertainment), used as a reading aid for GMs
-  who own the published module.
+metadata:
+  version: 0.2.0
+  skill_author:
+    name: Ola Hungerford
+    url: https://github.com/olaservo
+  source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-machine-frequency
+  depends_on:
+    - fallout-rpg
+  sources:
+    - title: fallout-rpg (sibling skill)
+      publisher: Ola Hungerford
+      url: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
+      relationship: system_encoding
+      rights_basis: license_grant
+      license: CC-BY-4.0
+      covers: 2d20 mechanics referenced in stat blocks, skill tests, and combat encounters
+    - title: "Fallout: The Roleplaying Game - Adventure Module Chapter Three: Machine Frequency"
+      publisher: Modiphius Entertainment
+      ip_holder: Bethesda Softworks
+      year: 2022
+      relationship: adventure_reading_aid
+      rights_basis: fair_use_reading_aid
+      covers: adventure structure, location summaries, NPC roles, plot beats, GM gotchas
+  attribution: |
+    Structural encoding of the Machine Frequency adventure for Fallout: The
+    Roleplaying Game (Modiphius Entertainment), used as a reading aid for GMs
+    who own the published module.
 ---
 
 Body.
@@ -156,37 +158,38 @@ Body.
 name: fallout-character-sheets
 description: Pre-generated player characters for Fallout - The Roleplaying Game (Modiphius 2d20).
 license: CC-BY-4.0
-version: 1.0.0
-skill_author:
-  name: Ola Hungerford
-  url: https://github.com/olaservo
-source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-character-sheets
-depends_on:
-  - fallout-rpg
-sources:
-  - title: fallout-rpg (sibling skill)
-    publisher: Ola Hungerford
-    url: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
-    relationship: system_encoding
-    rights_basis: license_grant
-    license: CC-BY-4.0
-    covers: 2d20 mechanics (S.P.E.C.I.A.L., skills, perks, AP, Luck, combat resolution)
-  - title: "Fallout: The Roleplaying Game (Core Rulebook)"
-    publisher: Modiphius Entertainment
-    ip_holder: Bethesda Softworks
-    year: 2021
-    url: https://www.modiphius.net/products/fallout-the-roleplaying-game
-    relationship: trademark_setting_vocabulary
-    rights_basis: fair_use_claim
-    covers: Fallout-universe origins and trademark terms used in pregen backgrounds
-own_contributions:
-  - Six original pre-generated player characters with full sheets, biographies, and inventories
-  - Picker logic for matching players to characters by play style
-  - Composition guidance for pairing the party with the fallout-machine-frequency adventure
-attribution: |
-  Six pre-generated player characters by Ola Hungerford, licensed CC-BY-4.0.
-  Built on the fallout-rpg sibling skill for 2d20 system mechanics. Uses
-  Fallout-universe setting vocabulary under fair use claim.
+metadata:
+  version: 1.0.0
+  skill_author:
+    name: Ola Hungerford
+    url: https://github.com/olaservo
+  source: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-character-sheets
+  depends_on:
+    - fallout-rpg
+  sources:
+    - title: fallout-rpg (sibling skill)
+      publisher: Ola Hungerford
+      url: https://github.com/olaservo/agent-skills-ttrpg-demo/tree/main/mcp/fallout-helper/skills/fallout-ttrpg/fallout-rpg
+      relationship: system_encoding
+      rights_basis: license_grant
+      license: CC-BY-4.0
+      covers: 2d20 mechanics (S.P.E.C.I.A.L., skills, perks, AP, Luck, combat resolution)
+    - title: "Fallout: The Roleplaying Game (Core Rulebook)"
+      publisher: Modiphius Entertainment
+      ip_holder: Bethesda Softworks
+      year: 2021
+      url: https://www.modiphius.net/products/fallout-the-roleplaying-game
+      relationship: trademark_setting_vocabulary
+      rights_basis: fair_use_claim
+      covers: Fallout-universe origins and trademark terms used in pregen backgrounds
+  own_contributions:
+    - Six original pre-generated player characters with full sheets, biographies, and inventories
+    - Picker logic for matching players to characters by play style
+    - Composition guidance for pairing the party with the fallout-machine-frequency adventure
+  attribution: |
+    Six pre-generated player characters by Ola Hungerford, licensed CC-BY-4.0.
+    Built on the fallout-rpg sibling skill for 2d20 system mechanics. Uses
+    Fallout-universe setting vocabulary under fair use claim.
 ---
 
 Body.
@@ -407,7 +410,7 @@ assert.equal(uncreditedResult.info.complianceLevel, 'non-compliant');
 assert.ok(
   uncreditedResult.messages.some(
     (m) =>
-      m.path === '$.frontmatter.sources' && m.severity === 'info',
+      m.path === '$.frontmatter.metadata.sources' && m.severity === 'info',
   ),
 );
 

@@ -49,6 +49,7 @@ interface Frontmatter {
   attribution?: unknown;
   depends_on?: unknown;
   own_contributions?: unknown;
+  metadata?: Record<string, unknown>;
   [k: string]: unknown;
 }
 
@@ -70,6 +71,21 @@ function parseFrontmatter(text: string): Frontmatter | undefined {
     // Malformed YAML — caller will surface as an error message.
   }
   return undefined;
+}
+
+/**
+ * Per the Agent Skills spec, only `name`, `description`, `license`,
+ * `compatibility`, `metadata`, and `allowed-tools` are recognised at the top
+ * of the frontmatter; everything else lives under `metadata`. Resolve custom
+ * fields by checking `metadata` first and falling back to the top level for
+ * legacy SKILL.md files that haven't migrated.
+ */
+function metadataField<T = unknown>(fm: Frontmatter, key: string): T | undefined {
+  const md = fm.metadata;
+  if (md && typeof md === 'object' && !Array.isArray(md) && md[key] !== undefined) {
+    return md[key] as T;
+  }
+  return fm[key] as T | undefined;
 }
 
 interface AuditTuple {
@@ -167,29 +183,48 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
           severity: 'error',
         });
       } else {
-        // Layered-attribution shape takes precedence; legacy fields are the
-        // fallback so existing SKILL.md files keep grading the same.
-        const author = fm.skill_author ?? fm.author;
-        const chain = Array.isArray(fm.sources)
-          ? (fm.sources as unknown[])
-          : Array.isArray(fm.derived_from)
-            ? (fm.derived_from as unknown[])
+        // Per the Agent Skills spec, custom fields live under `metadata`.
+        // The lookup falls back to top-level so legacy SKILL.md files keep
+        // grading the same; the message paths point at the spec-compliant
+        // location regardless.
+        const skillAuthor = metadataField<Frontmatter['skill_author']>(
+          fm,
+          'skill_author',
+        );
+        const legacyAuthor = metadataField<Frontmatter['author']>(fm, 'author');
+        const author = skillAuthor ?? legacyAuthor;
+        const sourcesField = metadataField(fm, 'sources');
+        const derivedFromField = metadataField(fm, 'derived_from');
+        const chain = Array.isArray(sourcesField)
+          ? (sourcesField as unknown[])
+          : Array.isArray(derivedFromField)
+            ? (derivedFromField as unknown[])
             : undefined;
+        const attributionField = metadataField(fm, 'attribution');
         const runtimeAttribution =
-          typeof fm.attribution === 'string' ? fm.attribution : undefined;
-        const dependsOn = Array.isArray(fm.depends_on)
-          ? (fm.depends_on as unknown[])
+          typeof attributionField === 'string' ? attributionField : undefined;
+        const dependsOnField = metadataField(fm, 'depends_on');
+        const dependsOn = Array.isArray(dependsOnField)
+          ? (dependsOnField as unknown[])
           : undefined;
-        const ownContributions = Array.isArray(fm.own_contributions)
-          ? (fm.own_contributions as unknown[])
+        const ownContributionsField = metadataField(fm, 'own_contributions');
+        const ownContributions = Array.isArray(ownContributionsField)
+          ? (ownContributionsField as unknown[])
           : undefined;
+        const sourceUrl =
+          metadataField<string>(fm, 'source') ??
+          metadataField<string>(fm, 'homepage') ??
+          metadataField<string>(fm, 'repository');
+        const citations =
+          metadataField(fm, 'citations') ?? metadataField(fm, 'references');
+        const version = metadataField<string>(fm, 'version');
 
         attribution = {
           author,
           license: fm.license,
-          source: fm.source ?? fm.homepage ?? fm.repository,
-          citations: fm.citations ?? fm.references,
-          version: fm.version,
+          source: sourceUrl,
+          citations,
+          version,
           sources: chain,
           runtime_attribution: runtimeAttribution,
           depends_on: dependsOn,
@@ -198,7 +233,7 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
 
         if (!author) {
           messages.push({
-            path: '$.frontmatter.skill_author',
+            path: '$.frontmatter.metadata.skill_author',
             message:
               'Skill is missing `skill_author` (or legacy `author`) — attribution credit cannot be assigned.',
             severity: 'warn',
@@ -214,7 +249,7 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
         }
         if (!attribution.source) {
           messages.push({
-            path: '$.frontmatter.source',
+            path: '$.frontmatter.metadata.source',
             message:
               'Skill is missing `source` / `homepage` / `repository` — provenance is unverifiable.',
             severity: 'info',
@@ -222,15 +257,15 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
         }
         if (!attribution.citations) {
           messages.push({
-            path: '$.frontmatter.citations',
+            path: '$.frontmatter.metadata.citations',
             message:
               'Skill declares no `citations` / `references` — outside material is unattributed.',
             severity: 'info',
           });
         }
-        if (!fm.version) {
+        if (!version) {
           messages.push({
-            path: '$.frontmatter.version',
+            path: '$.frontmatter.metadata.version',
             message:
               'Skill is missing `version` — reproducibility is harder.',
             severity: 'info',
@@ -238,7 +273,7 @@ export const skillAttributionValidator: McpInterceptor = defineInterceptor({
         }
         if (!chain || chain.length === 0) {
           messages.push({
-            path: '$.frontmatter.sources',
+            path: '$.frontmatter.metadata.sources',
             message:
               'Skill declares no `sources` (or legacy `derived_from`) — upstream chain undeclared.',
             severity: 'info',

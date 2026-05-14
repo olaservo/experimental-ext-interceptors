@@ -20,25 +20,25 @@ For every `resources/read` whose URI ends in `/SKILL.md`, the gateway:
 
 ## What gets validated
 
-The interceptor fires on `resources/read` **response** phase for any URI ending in `/SKILL.md` (per SEP-2640's URI shape). It parses YAML frontmatter and checks:
+The interceptor fires on `resources/read` **response** phase for any URI ending in `/SKILL.md` (per SEP-2640's URI shape). It parses YAML frontmatter and checks the fields below. Per the Agent Skills spec, only `name`, `description`, `license`, `compatibility`, `metadata`, and `allowed-tools` are recognised at the top of the frontmatter; the rest of the custom fields below are read from under `metadata` (with a top-level fallback for legacy SKILL.md files that haven't migrated).
 
-| Frontmatter field | If missing | Severity |
-|---|---|---|
-| `skill_author` (or legacy `author`) | "credit can't be assigned" | `warn` |
-| `license` | "reuse rights unclear" | `warn` |
-| `source` / `homepage` / `repository` | "provenance unverifiable" | `info` |
-| `citations` / `references` | "outside material unattributed" | `info` |
-| `version` | "reproducibility harder" | `info` |
-| `sources` (or legacy `derived_from`) | "upstream chain undeclared" | `info` |
-| _(no frontmatter at all)_ | "fails SEP-2640 conformance" | `error` |
+| Frontmatter field | Spec location | If missing | Severity |
+|---|---|---|---|
+| `skill_author` (or legacy `author`) | `metadata.skill_author` | "credit can't be assigned" | `warn` |
+| `license` | top-level | "reuse rights unclear" | `warn` |
+| `source` / `homepage` / `repository` | `metadata.source` | "provenance unverifiable" | `info` |
+| `citations` / `references` | `metadata.citations` | "outside material unattributed" | `info` |
+| `version` | `metadata.version` | "reproducibility harder" | `info` |
+| `sources` (or legacy `derived_from`) | `metadata.sources` | "upstream chain undeclared" | `info` |
+| _(no frontmatter at all)_ | — | "fails SEP-2640 conformance" | `error` |
 
 Per SEP-2624, only `error` blocks the chain. `warn` and `info` are non-blocking by default.
 
-The validator also reads three layered-attribution fields and surfaces them verbatim in the audit record (without grading them):
+The validator also reads three layered-attribution fields (all under `metadata` per the Agent Skills spec, with top-level fallback) and surfaces them verbatim in the audit record (without grading them):
 
-- `attribution` — a multi-line string hosts SHOULD render at session start; emitted as `attribution.runtime_attribution`.
-- `depends_on` — sibling skills this skill composes with at runtime.
-- `own_contributions` — original creative work that coexists with declared derivation.
+- `metadata.attribution` — a multi-line string hosts SHOULD render at session start; emitted as `attribution.runtime_attribution`.
+- `metadata.depends_on` — sibling skills this skill composes with at runtime.
+- `metadata.own_contributions` — original creative work that coexists with declared derivation.
 
 The compliance level reported on each read is one of:
 
