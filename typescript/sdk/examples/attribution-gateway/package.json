@@ -1,0 +1,9 @@
+{
+  "name": "attribution-gateway-example",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mcp-ext-interceptors": "file:../..",
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  }
+}

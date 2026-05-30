@@ -26,6 +26,14 @@
     "example:gateway": "npm run build && tsx examples/gateway/src/index.ts",
     "example:transparent-proxy": "npm run build && tsx examples/transparent-proxy/src/index.ts",
     "example:gateway-chain": "npm run build && tsx examples/gateway-chain/src/index.ts",
+    "example:skill-attribution": "npm run build && tsx examples/skill-attribution/src/index.ts",
+    "example:skill-attribution-demo": "npm run build && tsx examples/skill-attribution/src/demo.ts",
+    "example:showcase": "npm run build && tsx examples/showcase-interceptors/src/index.ts",
+    "example:showcase-demo": "npm run build && tsx examples/showcase-interceptors/src/demo.ts",
+    "example:fallout-proxy": "npm run build && tsx examples/fallout-attribution-proxy/src/index.ts",
+    "example:fallout-proxy-demo": "npm run build && tsx examples/fallout-attribution-proxy/src/demo.ts",
+    "example:attribution-gateway": "npm run build && tsx examples/attribution-gateway/src/index.ts",
+    "example:attribution-gateway-demo": "npm run build && tsx examples/attribution-gateway/src/demo.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -54,7 +62,9 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
+    "js-yaml": "^4.1.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.0.0",
