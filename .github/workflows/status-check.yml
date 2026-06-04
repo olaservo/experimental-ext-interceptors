@@ -7,7 +7,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_run:
-    workflows: ["C# CI", "Python CI", "Go CI", "TypeScript CI"]
+    workflows: ["C# CI", "Python CI", "Go CI", "Rust CI", "TypeScript CI"]
     types: [completed]
 
 permissions:
@@ -51,6 +51,9 @@ jobs:
             go:
               - 'go/**'
               - '.github/workflows/go.yml'
+            rust:
+              - 'rust/**'
+              - '.github/workflows/rust.yml'
             typescript:
               - 'typescript/**'
               - '.github/workflows/typescript.yml'
@@ -84,6 +87,11 @@ jobs:
                 'Go CI / Unit Tests (1.25)',
                 'Go CI / Race Detection'
               ],
+              rust: [
+                'Rust CI / Linting',
+                'Rust CI / Unit Tests',
+                'Rust CI / Build & Docs'
+              ],
               typescript: [
                 'TypeScript CI / Linting',
                 'TypeScript CI / Unit Tests (20)',
@@ -96,6 +104,7 @@ jobs:
               csharp: ${{ steps.changed-files.outputs.csharp }} === 'true',
               python: ${{ steps.changed-files.outputs.python }} === 'true',
               go: ${{ steps.changed-files.outputs.go }} === 'true',
+              rust: ${{ steps.changed-files.outputs.rust }} === 'true',
               typescript: ${{ steps.changed-files.outputs.typescript }} === 'true'
             };
 

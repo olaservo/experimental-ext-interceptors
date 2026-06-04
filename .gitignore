@@ -81,3 +81,11 @@ htmlcov/
 .coverage.*
 coverage.xml
 *.cover
+
+# Rust
+/rust/sdk/target/
+target/
+Cargo.lock
+
+# Local reference clones (e.g. the rmcp rust-sdk), never committed
+/reference/

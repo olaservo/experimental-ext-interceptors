@@ -1,0 +1,26 @@
+# Copyright 2025 The MCP Interceptors Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0
+# license that can be found in the LICENSE file.
+
+[package]
+name = "mcp-ext-interceptors"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+description = "Rust SDK for the MCP Interceptors extension (SEP-2624) — in-process execution model and skill-attribution validator."
+repository = "https://github.com/modelcontextprotocol/experimental-ext-interceptors"
+readme = "README.md"
+keywords = ["mcp", "interceptors", "sep-2624", "modelcontextprotocol"]
+categories = ["api-bindings"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-trait = "0.1"
+futures = "0.3"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
+serde_yaml_ng = "0.10"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
