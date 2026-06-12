@@ -147,13 +147,25 @@ async fn audit_skills(client: RunningService<RoleClient, ()>) -> DemoResult {
         println!("── {uri} ──");
         println!("    complianceLevel : {compliance}");
         println!("    severity        : {severity}");
-        if outcome.ok() {
-            println!("    read returned to agent ({bytes} bytes)");
-        } else {
+        // Enforce attribution, not mere SEP-2640 well-formedness: withhold any
+        // skill that credits nothing (`non-compliant` = no author and no
+        // license), whether it is malformed or merely parseable-but-uncredited.
+        // This mirrors the Goose host gate. A `partial` skill still loads.
+        if compliance == "non-compliant" {
             blocked += 1;
-            for a in &outcome.aborts {
-                println!("    BLOCKED — content withheld from agent: {}", a.reason);
-            }
+            let reasons = record
+                .and_then(|rec| rec.validation.as_ref())
+                .map(|v| {
+                    v.messages
+                        .iter()
+                        .map(|m| m.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                })
+                .unwrap_or_default();
+            println!("    BLOCKED — content withheld from agent: {reasons}");
+        } else {
+            println!("    read returned to agent ({bytes} bytes)");
         }
         println!();
     }
