@@ -1,0 +1,18 @@
+# Copyright 2025 The MCP Interceptors Authors. All rights reserved.
+# Use of this source code is governed by an Apache-2.0
+# license that can be found in the LICENSE file.
+
+[package]
+name = "skill-attribution-mcp"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Demo: a client-side MCP wrapper that audits skill attribution by running resources/read responses through the mcp-ext-interceptors chain."
+publish = false
+
+[dependencies]
+mcp-ext-interceptors = { path = "../../sdk" }
+rmcp = { version = "1.7", features = ["client", "transport-child-process"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "io-util", "process", "sync", "time"] }
+serde_json = "1"

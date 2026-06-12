@@ -90,7 +90,8 @@ jobs:
               rust: [
                 'Rust CI / Linting',
                 'Rust CI / Unit Tests',
-                'Rust CI / Build & Docs'
+                'Rust CI / Build & Docs',
+                'Rust CI / Demo (MCP)'
               ],
               typescript: [
                 'TypeScript CI / Linting',

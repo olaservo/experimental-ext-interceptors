@@ -67,3 +67,25 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
       - name: Run skill-attribution demo
         run: cargo run --example attribution_fixtures
+
+  rust-demo:
+    name: "Demo (MCP)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust/demos/skill-attribution-mcp
+    steps:
+      - name: Check out code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - name: Set up Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Build
+        run: cargo build
+      - name: Run fixture-backend demo (self-contained smoke test)
+        run: cargo run -p skill-attribution-mcp
